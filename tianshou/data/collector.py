@@ -3,7 +3,7 @@ import numpy as np
 import time
 import torch
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union, Literal
 
 from tianshou.data import (
     Batch,
@@ -16,6 +16,8 @@ from tianshou.data import (
 from tianshou.data.batch import _alloc_by_keys_diff
 from tianshou.env import BaseVectorEnv, DummyVectorEnv
 from tianshou.policy import BasePolicy
+from tianshou.utils import RunningMeanStd
+from tianshou.utils.statistics import NormaliserProtocol
 
 
 class Collector:
@@ -61,6 +63,7 @@ class Collector:
         buffer: Optional[ReplayBuffer] = None,
         preprocess_fn: Optional[Callable[..., Batch]] = None,
         exploration_noise: bool = False,
+        state_normaliser_factory: Optional[Union[Literal["running_mean"],Callable[[gym.Env],NormaliserProtocol]]]="running_mean",
     ) -> None:
         super().__init__()
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
@@ -74,6 +77,20 @@ class Collector:
         self.policy = policy
         self.preprocess_fn = preprocess_fn
         self._action_space = self.env.action_space
+
+        self._num_collected_steps = 0
+
+        if state_normaliser_factory == "running_mean":
+            observation_shape = self.env.observation_space[0].shape
+            self.state_normaliser = RunningMeanStd(mean=np.zeros(observation_shape),
+                                               std = np.ones(observation_shape),
+                                               clip_max=np.inf)
+        elif state_normaliser_factory is not None:
+            self.state_normaliser = state_normaliser_factory(env)
+        else:
+            self.state_normaliser = None
+        self.buffer.set_state_normalizer(self.state_normaliser)
+
         # avoid creating attribute outside __init__
         self.reset(False)
 
@@ -251,9 +268,10 @@ class Collector:
 
         step_count = 0
         episode_count = 0
-        episode_rews = []
-        episode_lens = []
-        episode_start_indices = []
+        ep_rews = []
+        ep_lens = []
+        ep_start_idxs = []
+        filled_buffer_idxs = []
 
         while True:
             assert len(self.data) == len(ready_env_ids)
@@ -321,7 +339,7 @@ class Collector:
                     time.sleep(render)
 
             # add data into the buffer
-            ptr, ep_rew, ep_len, ep_idx = self.buffer.add(
+            new_buffer_idxs, ep_rew, ep_len, ep_idx = self.buffer.add(
                 self.data, buffer_ids=ready_env_ids
             )
 
@@ -332,9 +350,9 @@ class Collector:
                 env_ind_local = np.where(done)[0]
                 env_ind_global = ready_env_ids[env_ind_local]
                 episode_count += len(env_ind_local)
-                episode_lens.append(ep_len[env_ind_local])
-                episode_rews.append(ep_rew[env_ind_local])
-                episode_start_indices.append(ep_idx[env_ind_local])
+                ep_lens.append(ep_len[env_ind_local])
+                ep_rews.append(ep_rew[env_ind_local])
+                ep_start_idxs.append(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
                 self._reset_env_with_ids(
@@ -380,25 +398,29 @@ class Collector:
             self.reset_env()
 
         if episode_count > 0:
-            rews, lens, idxs = list(
-                map(np.concatenate, [episode_rews, episode_lens, episode_start_indices])
+            ep_rews, ep_lens, ep_start_idxs = list(
+                map(np.concatenate, [ep_rews, ep_lens, ep_start_idxs])
             )
-            rew_mean, rew_std = rews.mean(), rews.std()
-            len_mean, len_std = lens.mean(), lens.std()
+            ep_rew_mean, ep_rew_std = ep_rews.mean(), ep_rews.std()
+            ep_len_mean, ep_len_std = ep_lens.mean(), ep_lens.std()
         else:
-            rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
-            rew_mean = rew_std = len_mean = len_std = 0
+            ep_rews, ep_lens, ep_start_idxs = np.array([]), np.array([], int), np.array([], int)
+            ep_rew_mean = ep_rew_std = ep_len_mean = ep_len_std = 0
+        if self.state_normaliser is not None:
+            filled_buffer_idxs = np.unique(filled_buffer_idxs)
+            new_obs = self.buffer.obs[filled_buffer_idxs]
+            self.state_normaliser.update(new_obs)
 
         return {
             "n/ep": episode_count,
             "n/st": step_count,
-            "rews": rews,
-            "lens": lens,
-            "idxs": idxs,
-            "rew": rew_mean,
-            "len": len_mean,
-            "rew_std": rew_std,
-            "len_std": len_std,
+            "rews": ep_rews,
+            "lens": ep_lens,
+            "idxs": ep_start_idxs,
+            "rew": ep_rew_mean,
+            "len": ep_len_mean,
+            "rew_std": ep_rew_std,
+            "len_std": ep_len_std,
         }
 
 

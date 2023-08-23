@@ -1,8 +1,11 @@
+from copy import copy
 from numbers import Number
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Protocol, overload
 
 import numpy as np
 import torch
+
+from tianshou.utils.array_operations import array_clip, array_mean, array_var
 
 
 class MovAvg(object):
@@ -65,8 +68,14 @@ class MovAvg(object):
             return 0.0
         return float(np.std(self.cache))  # type: ignore
 
+class NormaliserProtocol(Protocol):
+    def norm(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+        pass
+    def update(self, data_array: Union[np.ndarray, torch.Tensor]) -> None:
+        pass
 
-class RunningMeanStd(object):
+
+class RunningMeanStd(NormaliserProtocol):
     """Calculates the running mean and std of a data stream.
 
     https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
@@ -76,29 +85,45 @@ class RunningMeanStd(object):
     :param float clip_max: the maximum absolute value for data array. Default to
         10.0.
     :param float epsilon: To avoid division by zero.
+    :param update freq: update the mean and var used for standardisation every k steps, 0 means no standardisation,
+    1 is normal running mean
     """
 
     def __init__(
         self,
-        mean: Union[float, np.ndarray] = 0.0,
-        std: Union[float, np.ndarray] = 1.0,
-        clip_max: Optional[float] = 10.0,
+        mean: Union[float, np.ndarray, torch.Tensor] = 0.0,
+        std: Union[float, np.ndarray, torch.Tensor] = 1.0,
+        clip_max: Optional[float] = 10.0, #todo remove default and set it where it is used
         epsilon: float = np.finfo(np.float32).eps.item(),
+        update_freq: int = 1,
     ) -> None:
-        self.mean, self.var = mean, std
+        self.mean, self.stale_mean, self.var, self.stale_var = mean,mean,std, std
         self.clip_max = clip_max
         self.count = 0
         self.eps = epsilon
+        self.update_freq = update_freq
 
-    def norm(self, data_array: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        data_array = (data_array - self.mean) / np.sqrt(self.var + self.eps)
+    @overload
+    def norm(self, arr: float) -> float:
+        ...
+
+    @overload
+    def norm(self, arr: np.ndarray) -> np.ndarray:
+        ...
+
+    @overload
+    def norm(self, arr: torch.Tensor) -> torch.Tensor:
+        ...
+
+    def norm(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+        data_array = (data_array - self.stale_mean) / np.sqrt(self.stale_var + self.eps)
         if self.clip_max:
-            data_array = np.clip(data_array, -self.clip_max, self.clip_max)
+            data_array = array_clip(data_array, -self.clip_max, self.clip_max)
         return data_array
 
-    def update(self, data_array: np.ndarray) -> None:
+    def update(self, data_array: Union[np.ndarray, torch.Tensor]) -> None:
         """Add a batch of item into RMS with the same shape, modify mean/var/count."""
-        batch_mean, batch_var = np.mean(data_array, axis=0), np.var(data_array, axis=0)
+        batch_mean, batch_var = array_mean(data_array), array_var(data_array)
         batch_count = len(data_array)
 
         delta = batch_mean - self.mean
@@ -111,4 +136,7 @@ class RunningMeanStd(object):
         new_var = m_2 / total_count
 
         self.mean, self.var = new_mean, new_var
+        if self.count//self.update_freq != total_count//self.update_freq:
+            self.stale_mean = copy(self.mean)
+            self.stale_var = copy(self.var)
         self.count = total_count

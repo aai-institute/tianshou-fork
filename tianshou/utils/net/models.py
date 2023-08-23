@@ -87,7 +87,10 @@ class PLTrainable(pl.LightningModule):
         self.pl_trainer = pl_trainer or get_default_pl_trainer(es_monitor=es_monitor)
 
     def configure_optimizers(self) -> Any:
-        optim = self.optim_class(self.parameters(), lr=self.lr)
+        #Todo make it back to the orginal versatile code, how can this support different optimizers with different args?
+        #optim = self.optim_class(self.parameters(), lr=self.lr)
+        optim = torch.optim.SGD(self.parameters(), lr= 0.01, momentum = 0.9)
+
         result = {
             "optimizer": optim,
         }

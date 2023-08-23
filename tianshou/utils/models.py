@@ -89,9 +89,15 @@ def init_and_get_optim(
     :return: the optimizer instance
     """
     actor_critic = init_actor_critic(actor, critic)
-    optim = optim_class(actor_critic.parameters(), lr=lr)
+    #optim = optim_class(actor_critic.parameters(), lr=lr)
+    #quick and dirty, use momentum as in awr paper
+    optim = torch.optim.SGD(actor.parameters(), lr= 0.00005, momentum = 0.9)
     return optim
 
-
-def fixed_std_normal(*logits):
+def std_normal(*logits):
     return Independent(Normal(*logits), 1)
+#todo make this work with passing the std multiplier only once, this value if for halfcheetah
+def fixed_std_normal(*logits):
+    logits, std = logits
+    std = torch.ones_like(std)*0.4
+    return Independent(Normal(logits, std), 1)

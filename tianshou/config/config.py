@@ -41,11 +41,11 @@ class LoggerConfig:
 class TrainerConfig:
     """Sampling, epochs, parallelization, buffers, collectors, and batching."""
 
-    num_epochs: int = 100
-    step_per_epoch: int = 30000
+    num_epochs: int = 3000000
+    step_per_epoch: int = 1
     batch_size: int = 1024
-    num_train_envs: int = 64
-    num_test_envs: int = 10
+    num_train_envs: int = 9
+    num_test_envs: int = 1
     """For watching a policy perform in the rendered env (e.g. with render_mode="human"), 
     `num_test_envs=1 `is recommended."""
     buffer_size: int = 20000
