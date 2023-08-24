@@ -41,8 +41,8 @@ class LoggerConfig:
 class TrainerConfig:
     """Sampling, epochs, parallelization, buffers, collectors, and batching."""
 
-    num_epochs: int = 3000000
-    step_per_epoch: int = 1
+    num_epochs: int = 1
+    step_per_epoch: int = 3000000
     batch_size: int = 1024
     num_train_envs: int = 9
     num_test_envs: int = 1

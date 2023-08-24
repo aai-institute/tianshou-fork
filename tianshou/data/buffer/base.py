@@ -61,7 +61,11 @@ class ReplayBuffer:
         self._sample_avail = sample_avail
         self._meta: Batch = Batch()
         self._ep_rew: Union[float, np.ndarray]
+        self.state_normalizer = None
         self.reset()
+
+    def set_state_normalizer(self, state_normalizer):
+        self.state_normalizer = state_normalizer
 
     def __len__(self) -> int:
         """Return len(self)."""
@@ -137,6 +141,7 @@ class ReplayBuffer:
         self._index = self._size = 0
         if not keep_statistics:
             self._ep_rew, self._ep_len, self._ep_idx = 0.0, 0, 0
+        # TODO: support state norm
 
     def set_batch(self, batch: Batch) -> None:
         """Manually choose the batch you want the ReplayBuffer to manage."""

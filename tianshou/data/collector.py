@@ -94,6 +94,10 @@ class Collector:
         # avoid creating attribute outside __init__
         self.reset(False)
 
+    @property
+    def num_collected_steps(self):
+        return self._num_collected_steps
+
     def _assign_buffer(self, buffer: Optional[ReplayBuffer]) -> None:
         """Check if the buffer matches the constraint."""
         if buffer is None:
@@ -132,6 +136,7 @@ class Collector:
         """
         # use empty Batch for "state" so that self.data supports slicing
         # convert empty Batch to None when passing data to policy
+        self._num_collected_steps = 0
         self.data = Batch(
             obs={},
             act={},
@@ -342,6 +347,8 @@ class Collector:
             new_buffer_idxs, ep_rew, ep_len, ep_idx = self.buffer.add(
                 self.data, buffer_ids=ready_env_ids
             )
+            self._num_collected_steps += len(new_buffer_idxs)
+            filled_buffer_idxs.extend(new_buffer_idxs)
 
             # collect statistics
             step_count += len(ready_env_ids)
