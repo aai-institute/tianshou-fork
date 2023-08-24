@@ -1,6 +1,6 @@
 import gymnasium as gym
 import warnings
-from typing import Literal, Optional, Tuple
+from typing import Literal, Optional, Tuple, Union
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.env import ShmemVectorEnv, VectorEnvNormObs
@@ -69,8 +69,9 @@ def make_mujoco_env(
     seed: int,
     num_train_envs: int,
     num_test_envs: int,
-    obs_norm: bool,
+    obs_norm: Union[bool, int], #weather to normalise, int if we want normaliation with stale mean and var
     render_mode: Optional[Literal["human", "rgb_array"]] = None,
+    clip_max:int = 10, #maximal value used in clipping in normalied, todo get rid of this
 ):
     """Wrapper function for Mujoco env.
 
@@ -105,9 +106,9 @@ def make_mujoco_env(
         # seeding through numpy is sufficient for mujoco
         train_envs.seed(seed)
         test_envs.seed(seed)
-    if obs_norm:
+    if bool(obs_norm):
         # obs norm wrapper
-        train_envs = VectorEnvNormObs(train_envs)
+        train_envs = VectorEnvNormObs(train_envs, update_obs_rms=int(obs_norm), clip_max=clip_max)
         test_envs = VectorEnvNormObs(test_envs, update_obs_rms=False)
         test_envs.set_obs_rms(train_envs.get_obs_rms())
     return env, train_envs, test_envs

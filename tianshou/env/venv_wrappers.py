@@ -67,12 +67,13 @@ class VectorEnvNormObs(VectorEnvWrapper):
 
     :param bool update_obs_rms: whether to update obs_rms. Default to True.
     """
-
-    def __init__(self, venv: BaseVectorEnv, update_obs_rms: bool = True) -> None:
+    #todo how to deal properly with this clip max value?
+    def __init__(self, venv: BaseVectorEnv, update_obs_rms: Union[bool,int] = True, clip_max = 10) -> None:
         super().__init__(venv)
         # initialize observation running mean/std
-        self.update_obs_rms = update_obs_rms
-        self.obs_rms = RunningMeanStd()
+        self.update_obs_rms = bool(update_obs_rms)
+        self.obs_rms = RunningMeanStd(clip_max=clip_max,
+                                      update_freq=int(update_obs_rms))
 
     def reset(
         self, id: Optional[Union[int, List[int], np.ndarray]] = None, **kwargs: Any

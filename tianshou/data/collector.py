@@ -79,7 +79,7 @@ class Collector:
         self._action_space = self.env.action_space
 
         self._num_collected_steps = 0
-
+        #todo think of a principled way and if we do need this
         if state_normaliser_factory == "running_mean":
             observation_shape = self.env.observation_space[0].shape
             self.state_normaliser = RunningMeanStd(mean=np.zeros(observation_shape),
