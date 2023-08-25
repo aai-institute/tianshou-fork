@@ -54,7 +54,7 @@ def array_var(arr: torch.Tensor) -> torch.Tensor:
 def array_var(arr: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
     """Compute the standard deviation of a scalar or a tensor."""
     if isinstance(arr, torch.Tensor):
-        return torch.var(arr.float(), dim = 0)
+        return torch.var(arr.float(),unbiased=False, dim = 0)
     elif isinstance(arr, np.ndarray):
         return np.var(arr, axis = 0)
     else:
