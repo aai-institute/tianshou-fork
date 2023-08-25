@@ -1,10 +1,12 @@
 import argparse
 import datetime
 import os
-from torch.utils.tensorboard import SummaryWriter
 from typing import Literal, Optional, Tuple, Union
 
+from torch.utils.tensorboard import SummaryWriter
+
 from tianshou.config import LoggerConfig
+
 from .tensorboard import TensorboardLogger
 from .wandb import WandbLogger
 

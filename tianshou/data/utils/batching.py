@@ -1,15 +1,8 @@
+from typing import Callable, Iterator, Literal, Optional, Sequence, TypeVar, Union
+
 import numpy as np
 import torch
 from torch.utils.data import Subset, TensorDataset
-from typing import (
-    Callable,
-    Iterator,
-    Literal,
-    Optional,
-    Sequence,
-    TypeVar,
-    Union,
-)
 
 
 def get_batch_boundaries(

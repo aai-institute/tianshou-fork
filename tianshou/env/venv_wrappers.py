@@ -3,7 +3,7 @@ from typing import Any, List, Optional, Tuple, Union
 import numpy as np
 
 from tianshou.env.utils import gym_new_venv_step_type
-from tianshou.env.venvs import BaseVectorEnv, GYM_RESERVED_KEYS
+from tianshou.env.venvs import GYM_RESERVED_KEYS, BaseVectorEnv
 from tianshou.utils import RunningMeanStd
 
 

@@ -1,11 +1,12 @@
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+
 import gymnasium as gym
 import numpy as np
 import torch
-from abc import ABC, abstractmethod
 from gymnasium.spaces import Box, Discrete, MultiBinary, MultiDiscrete
 from numba import njit
 from torch import nn
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from tianshou.data import Batch, ReplayBuffer, to_numpy, to_torch_as
 from tianshou.data.batch import BatchProtocol

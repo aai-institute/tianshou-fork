@@ -1,6 +1,6 @@
 from copy import copy
 from numbers import Number
-from typing import List, Optional, Union, Protocol, overload
+from typing import List, Optional, Protocol, Union, overload
 
 import numpy as np
 import torch
@@ -140,3 +140,4 @@ class RunningMeanStd(NormaliserProtocol):
             self.stale_mean = copy(self.mean)
             self.stale_var = copy(self.var)
         self.count = total_count
+

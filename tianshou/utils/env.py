@@ -1,6 +1,7 @@
-import gymnasium as gym
 import warnings
 from typing import Literal, Optional, Tuple, Union
+
+import gymnasium as gym
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.env import ShmemVectorEnv, VectorEnvNormObs

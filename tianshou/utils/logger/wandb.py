@@ -4,7 +4,7 @@ from typing import Callable, Optional, Tuple
 
 from torch.utils.tensorboard import SummaryWriter
 
-from .base import BaseLogger, LOG_DATA_TYPE
+from .base import LOG_DATA_TYPE, BaseLogger
 from .tensorboard import TensorboardLogger
 
 try:

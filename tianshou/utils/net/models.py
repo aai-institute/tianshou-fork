@@ -1,14 +1,15 @@
-import lightning.pytorch as pl
 import logging
-import torch
 from copy import copy
+from typing import Any, Callable, Optional, Tuple
+
+import lightning.pytorch as pl
+import torch
 from lightning import Callback
 from lightning.pytorch.callbacks import EarlyStopping
 from torch import nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import TensorDataset, random_split
-from typing import Any, Callable, Optional, Tuple
 
 from tianshou.data.utils.batching import BatchDataLoader
 from tianshou.utils.types import TOptimFactory

@@ -4,7 +4,6 @@
 from tianshou.data.batch import Batch
 from tianshou.data.utils.converter import to_numpy, to_torch, to_torch_as
 from tianshou.data.utils.segtree import SegmentTree
-from tianshou.data.utils.normaliser import Normalizer
 from tianshou.data.buffer.base import ReplayBuffer
 from tianshou.data.buffer.prio import PrioritizedReplayBuffer
 from tianshou.data.buffer.her import HERReplayBuffer
@@ -39,5 +38,4 @@ __all__ = [
     "CachedReplayBuffer",
     "Collector",
     "AsyncCollector",
-    "Normalizer"
 ]

@@ -1,5 +1,6 @@
-import torch
 from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Union
+
+import torch
 
 TDevice = Optional[Union[str, int, torch.device]]
 TShape = Union[int, Sequence[int]]

@@ -1,7 +1,8 @@
-import torch
 from dataclasses import dataclass
-from jsonargparse import set_docstring_parse_options
 from typing import Literal, Optional, Sequence
+
+import torch
+from jsonargparse import set_docstring_parse_options
 
 set_docstring_parse_options(attribute_docstrings=True)
 

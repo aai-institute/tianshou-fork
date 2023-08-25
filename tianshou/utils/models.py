@@ -1,8 +1,9 @@
+from typing import Optional, Sequence
+
 import numpy as np
 import torch
 from torch import nn
 from torch.distributions import Independent, Normal
-from typing import Optional, Sequence
 
 from tianshou.env import VectorEnvNormObs
 from tianshou.policy import BasePolicy

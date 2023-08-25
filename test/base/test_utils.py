@@ -30,7 +30,7 @@ def test_moving_average():
     assert np.allclose(stat.std()**2, 2)
 
 
-def test_rms():
+def test_rms_nparray():
     rms = RunningMeanStd()
     assert np.allclose(rms.mean, 0)
     assert np.allclose(rms.var, 1)
@@ -39,6 +39,14 @@ def test_rms():
     assert np.allclose(rms.mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
     assert np.allclose(rms.var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
 
+def test_rms_tensor():
+    rms = RunningMeanStd()
+    assert np.allclose(rms.mean, 0)
+    assert np.allclose(rms.var, 1)
+    rms.update(torch.tensor([[[1, 2], [3, 5]]]))
+    rms.update(torch.tensor([[[1, 2], [3, 4]], [[1, 2], [0, 0]]]))
+    assert np.allclose(rms.mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
+    assert np.allclose(rms.var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
 
 def test_net():
     # here test the networks that does not appear in the other script
@@ -141,6 +149,7 @@ def test_lr_schedulers():
 if __name__ == '__main__':
     test_noise()
     test_moving_average()
-    test_rms()
+    test_rms_nparray()
+    test_rms_tensor()
     test_net()
     test_lr_schedulers()

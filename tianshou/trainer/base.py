@@ -1,10 +1,10 @@
+import time
+from abc import ABC, abstractmethod
 from collections import defaultdict, deque
+from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
 
 import numpy as np
-import time
 import tqdm
-from abc import ABC, abstractmethod
-from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
 
 from tianshou.data import AsyncCollector, Collector, ReplayBuffer
 from tianshou.policy import BasePolicy

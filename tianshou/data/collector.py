@@ -1,9 +1,10 @@
+import time
+import warnings
+from typing import Any, Callable, Dict, List, Literal, Optional, Union
+
 import gymnasium as gym
 import numpy as np
-import time
 import torch
-import warnings
-from typing import Any, Callable, Dict, List, Optional, Union, Literal
 
 from tianshou.data import (
     Batch,

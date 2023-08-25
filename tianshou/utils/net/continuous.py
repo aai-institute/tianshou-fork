@@ -1,8 +1,9 @@
+import warnings
+from typing import Any, Dict, Optional, Sequence, Tuple, Type, Union
+
 import numpy as np
 import torch
-import warnings
 from torch import nn
-from typing import Any, Dict, Optional, Sequence, Tuple, Type, Union
 
 from tianshou.utils.net.common import MLP, get_module_device
 from tianshou.utils.types import TDevice

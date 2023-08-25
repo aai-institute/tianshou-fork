@@ -1,6 +1,7 @@
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
+
 import numpy as np
 import torch
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 from tianshou.data import Batch, ReplayBuffer, to_torch, to_torch_as
 from tianshou.policy import BasePolicy

@@ -1,4 +1,4 @@
-from typing import overload, Union
+from typing import Union, overload
 
 import numpy as np
 import torch
@@ -35,7 +35,7 @@ def array_mean(arr: torch.Tensor) -> torch.Tensor:
 def array_mean(arr: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
     """Compute the mean of a scalar or a tensor."""
     if isinstance(arr, torch.Tensor):
-        return torch.mean(arr, dim = 0)
+        return torch.mean(arr.float(), dim = 0)
     elif isinstance(arr, np.ndarray):
         return np.mean(arr, axis = 0)
     else:
@@ -54,7 +54,7 @@ def array_var(arr: torch.Tensor) -> torch.Tensor:
 def array_var(arr: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
     """Compute the standard deviation of a scalar or a tensor."""
     if isinstance(arr, torch.Tensor):
-        return torch.var(arr, dim = 0)
+        return torch.var(arr.float(), dim = 0)
     elif isinstance(arr, np.ndarray):
         return np.var(arr, axis = 0)
     else:
