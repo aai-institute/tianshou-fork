@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -7,9 +7,27 @@ from torch.distributions import Independent, Normal
 
 from tianshou.env import VectorEnvNormObs
 from tianshou.policy import BasePolicy
-from tianshou.utils.net.common import ActorCritic, Net
+from tianshou.utils.net.common import ActorCritic, ModuleType, Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 from tianshou.utils.types import TDevice, TOptimFactory, TShape
+
+
+def simple_nn_init(
+    module: nn.Module,
+    initializer: Callable[[torch.Tensor, ...], Optional[torch.Tensor]],
+    **initializer_kwargs,
+):
+    """Initializes the weights of a module with a given initializer.
+
+    :param module: the module to initialize
+    :param initializer: a function that takes a tensor and initializes it
+    :param initializer_kwargs: keyword arguments to pass to the initializer
+    """
+    for m in module.modules():
+        if isinstance(m, torch.nn.Linear):
+            initializer(m.weight, **initializer_kwargs)
+            if m.bias is not None:
+                torch.nn.init.zeros_(m.bias)
 
 
 def resume_from_checkpoint(
@@ -36,14 +54,16 @@ def get_actor_critic(
     state_shape: TShape,
     hidden_sizes: Sequence[int],
     action_shape: TShape,
+    activation_a: Union[ModuleType, Sequence[ModuleType]] = nn.Tanh,
+    activation_c: Union[ModuleType, Sequence[ModuleType]] = nn.Tanh,
     device: TDevice = "cpu",
 ):
     net_a = Net(
-        state_shape, hidden_sizes=hidden_sizes, activation=nn.Tanh, device=device
+        state_shape, hidden_sizes=hidden_sizes, activation=activation_a, device=device
     )
     actor = ActorProb(net_a, action_shape, unbounded=True, device=device)
     net_c = Net(
-        state_shape, hidden_sizes=hidden_sizes, activation=nn.Tanh, device=device
+        state_shape, hidden_sizes=hidden_sizes, activation=activation_c, device=device
     )
     critic = Critic(net_c)
     return actor, critic
@@ -56,6 +76,7 @@ def init_actor_critic(actor: nn.Module, critic: nn.Module):
     """
 
     actor_critic = ActorCritic(actor, critic)
+
     torch.nn.init.constant_(actor.sigma_param, -0.5)
     for m in actor_critic.modules():
         if isinstance(m, torch.nn.Linear):
@@ -80,6 +101,7 @@ def init_and_get_optim(
     critic: nn.Module,
     lr: float,
     optim_class: TOptimFactory = torch.optim.Adam,
+    optim_on_actor_only: bool = False,
 ):
     """Initializes layers of actor and critic and returns an optimizer.
 
@@ -90,15 +112,16 @@ def init_and_get_optim(
     :return: the optimizer instance
     """
     actor_critic = init_actor_critic(actor, critic)
-    #optim = optim_class(actor_critic.parameters(), lr=lr)
-    #quick and dirty, use momentum as in awr paper
-    optim = torch.optim.SGD(actor.parameters(), lr= 0.00005, momentum = 0.9)
-    return optim
+    params = actor_critic.parameters() if optim_on_actor_only else actor.parameters()
+    return optim_class(params, lr=lr)
+
 
 def std_normal(*logits):
     return Independent(Normal(*logits), 1)
-#todo make this work with passing the std multiplier only once, this value if for halfcheetah
+
+
+# todo make this work with passing the std multiplier only once, this value if for halfcheetah
 def fixed_std_normal(*logits):
     logits, std = logits
-    std = torch.ones_like(std)*0.4
+    std = torch.ones_like(std) * 0.4
     return Independent(Normal(logits, std), 1)

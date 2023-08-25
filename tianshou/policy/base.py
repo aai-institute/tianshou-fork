@@ -109,6 +109,7 @@ class BasePolicy(ABC, nn.Module):
         else:
             ValueError(f"Unsupported action space: {action_space}.")
         self.agent_id = 0
+        # TODO: remove?
         self.updating = False
         self.action_scaling = action_scaling
         self.action_bound_method = action_bound_method
@@ -242,6 +243,7 @@ class BasePolicy(ABC, nn.Module):
                     act = (np.log(1.0 + act) - np.log(1.0 - act)) / 2.0  # type: ignore
         return act
 
+    # TODO: rename to pre_process_fn?
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
     ) -> Batch:
@@ -306,6 +308,7 @@ class BasePolicy(ABC, nn.Module):
         if buffer is None:
             return {}
         batch, indices = buffer.sample(sample_size)
+        # TODO: is this var really needed?
         self.updating = True
         batch = self.process_fn(batch, buffer, indices)
         result = self.learn(batch, **kwargs)

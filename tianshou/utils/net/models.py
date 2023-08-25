@@ -88,10 +88,7 @@ class PLTrainable(pl.LightningModule):
         self.pl_trainer = pl_trainer or get_default_pl_trainer(es_monitor=es_monitor)
 
     def configure_optimizers(self) -> Any:
-        #Todo make it back to the orginal versatile code, how can this support different optimizers with different args?
-        #optim = self.optim_class(self.parameters(), lr=self.lr)
-        optim = torch.optim.SGD(self.parameters(), lr= 0.01, momentum = 0.9)
-
+        optim = self.optim_class(self.parameters(), lr=self.lr)
         result = {
             "optimizer": optim,
         }
@@ -117,7 +114,8 @@ class PLTrainable(pl.LightningModule):
     # TODO: doesn't cover cases of more complicated forwards (e.g. with actions)
     #  Should be extended if ever needed
     def _get_loss(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
-        v = self(X)
+        v = self(X).squeeze()
+        Y = Y.squeeze()
         return self.loss_fn(v, Y)
 
     def forward(self, X: torch.Tensor, *args, **kwargs) -> torch.Tensor:

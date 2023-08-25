@@ -64,7 +64,9 @@ class Collector:
         buffer: Optional[ReplayBuffer] = None,
         preprocess_fn: Optional[Callable[..., Batch]] = None,
         exploration_noise: bool = False,
-        state_normaliser_factory: Optional[Union[Literal["running_mean"],Callable[[gym.Env],NormaliserProtocol]]]="running_mean",
+        state_normaliser_factory: Optional[
+            Union[Literal["running_mean"], Callable[[gym.Env], NormaliserProtocol]]
+        ] = "running_mean",
     ) -> None:
         super().__init__()
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
@@ -80,12 +82,14 @@ class Collector:
         self._action_space = self.env.action_space
 
         self._num_collected_steps = 0
-        #todo think of a principled way and if we do need this
+        # todo think of a principled way and if we do need this
         if state_normaliser_factory == "running_mean":
             observation_shape = self.env.observation_space[0].shape
-            self.state_normaliser = RunningMeanStd(mean=np.zeros(observation_shape),
-                                               std = np.ones(observation_shape),
-                                               clip_max=np.inf)
+            self.state_normaliser = RunningMeanStd(
+                mean=np.zeros(observation_shape),
+                std=np.ones(observation_shape),
+                clip_max=np.inf,
+            )
         elif state_normaliser_factory is not None:
             self.state_normaliser = state_normaliser_factory(env)
         else:
@@ -213,7 +217,7 @@ class Collector:
         no_grad: bool = True,
         gym_reset_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Collect a specified number of step or episode.
+        """Collect a specified number of step or episode and returns a dict with stats.
 
         To ensure unbiased sampling result with n_episode option, this function will
         first collect ``n_episode - env_num`` episodes, then for the last ``env_num``
@@ -412,7 +416,11 @@ class Collector:
             ep_rew_mean, ep_rew_std = ep_rews.mean(), ep_rews.std()
             ep_len_mean, ep_len_std = ep_lens.mean(), ep_lens.std()
         else:
-            ep_rews, ep_lens, ep_start_idxs = np.array([]), np.array([], int), np.array([], int)
+            ep_rews, ep_lens, ep_start_idxs = (
+                np.array([]),
+                np.array([], int),
+                np.array([], int),
+            )
             ep_rew_mean = ep_rew_std = ep_len_mean = ep_len_std = 0
         if self.state_normaliser is not None:
             filled_buffer_idxs = np.unique(filled_buffer_idxs)

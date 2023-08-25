@@ -295,6 +295,8 @@ class BaseTrainer(ABC):
                 data: Dict[str, Any] = dict()
                 result: Dict[str, Any] = dict()
                 if self.train_collector is not None:
+                    # collect transitions from the training env and store them in the replay buffer
+                    # policy is not updated here
                     data, result, self.stop_fn_flag = self.train_step()
                     t.update(result["n/st"])
                     if self.stop_fn_flag:
@@ -393,32 +395,49 @@ class BaseTrainer(ABC):
 
         return test_stat, stop_fn_flag
 
+    # TODO: 1 a lot of duplication between the returned data_stats and result_stats
+    # TODO: 2 rename? A bit confusing to name this "train" when policy is not updated
     def train_step(self) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
-        """Perform one training step."""
+        """Perform one training-collection step.
+
+        Collects transitions from the training environments and executes
+        related hooks (like `train_fn` and `reward_metric`).
+        Note: does NOT update the policy!
+
+        :return: collected_data_stats, result_stats, stop_fn_flag
+        """
         assert self.episode_per_test is not None
         assert self.train_collector is not None
         stop_fn_flag = False
         if self.train_fn:
             self.train_fn(self.epoch, self.env_step)
-        result = self.train_collector.collect(
+        result_stats = self.train_collector.collect(
             n_step=self.step_per_collect, n_episode=self.episode_per_collect
         )
-        if result["n/ep"] > 0 and self.reward_metric:
-            rew = self.reward_metric(result["rews"])
-            result.update(rews=rew, rew=rew.mean(), rew_std=rew.std())
-        self.env_step += int(result["n/st"])
-        self.logger.log_train_data(result, self.env_step)
-        self.last_rew = result["rew"] if result["n/ep"] > 0 else self.last_rew
-        self.last_len = result["len"] if result["n/ep"] > 0 else self.last_len
-        data = {
+        if result_stats["n/ep"] > 0 and self.reward_metric:
+            rew = self.reward_metric(result_stats["rews"])
+            result_stats.update(rews=rew, rew=rew.mean(), rew_std=rew.std())
+        self.env_step += int(result_stats["n/st"])
+        self.logger.log_train_data(result_stats, self.env_step)
+        self.last_rew = (
+            result_stats["rew"] if result_stats["n/ep"] > 0 else self.last_rew
+        )
+        self.last_len = (
+            result_stats["len"] if result_stats["n/ep"] > 0 else self.last_len
+        )
+        collected_data_stats = {
             "env_step": str(self.env_step),
             "rew": f"{self.last_rew:.2f}",
             "len": str(int(self.last_len)),
-            "n/ep": str(int(result["n/ep"])),
-            "n/st": str(int(result["n/st"])),
+            "n/ep": str(int(result_stats["n/ep"])),
+            "n/st": str(int(result_stats["n/st"])),
         }
-        if result["n/ep"] > 0:
-            if self.test_in_train and self.stop_fn and self.stop_fn(result["rew"]):
+        if result_stats["n/ep"] > 0:
+            if (
+                self.test_in_train
+                and self.stop_fn
+                and self.stop_fn(result_stats["rew"])
+            ):
                 assert self.test_collector is not None
                 test_result = test_episode(
                     self.policy,
@@ -436,7 +455,7 @@ class BaseTrainer(ABC):
                 else:
                     self.policy.train()
 
-        return data, result, stop_fn_flag
+        return collected_data_stats, result_stats, stop_fn_flag
 
     def log_update_data(self, data: Dict[str, Any], losses: Dict[str, Any]) -> None:
         """Log losses to current logger."""

@@ -66,7 +66,8 @@ class TrainerConfig:
     1
     """
     update_per_step: float = 1.0
-    """The number of times the policy network would be updated per transition after 
+    """Only used in off-policy trainer.
+    The number of times the policy network would be updated per transition after 
     (step_per_collect) transitions are collected, e.g., if update_per_step set to 0.3, 
     and step_per_collect is 256 , policy will be updated round(256 * 0.3 = 76.8) = 77 
     times after 256 transitions are collected by the collector."""
