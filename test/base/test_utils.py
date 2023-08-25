@@ -39,14 +39,35 @@ def test_rms_nparray():
     assert np.allclose(rms.mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
     assert np.allclose(rms.var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
 
+def test_rms_stale_update():
+    rms = RunningMeanStd(update_freq=3)
+    assert np.allclose(rms.mean, 0)
+    assert np.allclose(rms.var, 1)
+    assert np.allclose(rms.stale_mean, 0)
+    assert np.allclose(rms.stale_var, 1)
+    rms.update(np.array([[[1, 2], [3, 5]]]))
+    rms.update(np.array([[[1, 2], [3, 4]], [[1, 2], [0, 0]]]))
+    assert np.allclose(rms.mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
+    assert np.allclose(rms.var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
+    assert np.allclose(rms.stale_mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
+    assert np.allclose(rms.stale_var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
+    rms.update(np.array([[[1, 2], [6, 7]]]))
+    assert np.allclose(rms.mean, np.array([[1, 2], [3, 4]]), atol=1e-3)
+    assert np.allclose(rms.var, np.array([[0, 0], [4.5, 6.5]]), atol=1e-3)
+    assert np.allclose(rms.stale_mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
+    assert np.allclose(rms.stale_var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
+
+
+
+
 def test_rms_tensor():
     rms = RunningMeanStd()
     assert np.allclose(rms.mean, 0)
     assert np.allclose(rms.var, 1)
-    rms.update(torch.tensor([[[1, 2], [3, 5]]]))
-    rms.update(torch.tensor([[[1, 2], [3, 4]], [[1, 2], [0, 0]]]))
-    assert np.allclose(rms.mean, np.array([[1, 2], [2, 3]]), atol=1e-3)
-    assert np.allclose(rms.var, np.array([[0, 0], [2, 14 / 3.]]), atol=1e-3)
+    rms.update(torch.tensor([[[1, 2], [3, 5]]]).float())
+    rms.update(torch.tensor([[[1, 2], [3, 4]], [[1, 2], [0, 0]]]).float())
+    assert torch.allclose(rms.mean, torch.tensor([[1, 2], [2, 3]]).float(), atol=1e-3)
+    assert torch.allclose(rms.var, torch.tensor([[0, 0], [2, 14 / 3.]]).float(), atol=1e-3)
 
 def test_net():
     # here test the networks that does not appear in the other script
@@ -151,5 +172,6 @@ if __name__ == '__main__':
     test_moving_average()
     test_rms_nparray()
     test_rms_tensor()
+    test_rms_stale_update()
     test_net()
     test_lr_schedulers()
