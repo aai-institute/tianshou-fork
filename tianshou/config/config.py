@@ -99,10 +99,7 @@ class PGConfig:
     ent_coef: float = 0.0
     vf_coef: float = 0.25
     max_grad_norm: float = 0.5
-    critic_loss: Callable[
-            [torch.Tensor, torch.Tensor], torch.Tensor
-        ] = nn.functional.mse_loss
-    critic_tau: float = 0.5
+
 
 @dataclass
 class PPOConfig:

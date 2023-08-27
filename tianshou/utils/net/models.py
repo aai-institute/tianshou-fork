@@ -64,9 +64,8 @@ class PLTrainable(pl.LightningModule):
         module: nn.Module,
         pl_trainer: pl.Trainer,
         loss_fn: Callable[
-            [torch.Tensor, torch.Tensor, float], torch.Tensor
-        ] = expectile_regression_loss, #nn.functional.mse_loss,
-        loss_tau: float = 0.5,
+            [torch.Tensor, torch.Tensor], torch.Tensor
+        ] = nn.functional.mse_loss,
         optim_factory: TOptimFactory = torch.optim.Adam,
         lr: float = 3e-4,
         lr_scheduler_factory: Optional[Callable[[Optimizer], LRScheduler]] = None,
@@ -76,7 +75,6 @@ class PLTrainable(pl.LightningModule):
         super().__init__()
         self.module = module
         self.loss_fn = loss_fn
-        self.loss_tau = loss_tau
         self.lr = lr
         self.optim_class = optim_factory
         self.scheduler_factory = lr_scheduler_factory
@@ -123,7 +121,7 @@ class PLTrainable(pl.LightningModule):
     def _get_loss(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         v = self(X).squeeze()
         Y = Y.squeeze()
-        return self.loss_fn(v, Y, self.loss_tau)
+        return self.loss_fn(v, Y)
 
     def forward(self, X: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         result = self.module(X, *args, **kwargs)
