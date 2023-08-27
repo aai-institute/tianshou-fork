@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence, Callable
 
 import torch
 from jsonargparse import set_docstring_parse_options
+from torch import nn
 
 set_docstring_parse_options(attribute_docstrings=True)
 
@@ -98,7 +99,10 @@ class PGConfig:
     ent_coef: float = 0.0
     vf_coef: float = 0.25
     max_grad_norm: float = 0.5
-
+    critic_loss: Callable[
+            [torch.Tensor, torch.Tensor], torch.Tensor
+        ] = nn.functional.mse_loss
+    critic_tau: float = 0.5
 
 @dataclass
 class PPOConfig:
