@@ -142,12 +142,18 @@ class MLP(nn.Module):
         self.model = nn.Sequential(*model)
         self.flatten_input = flatten_input
 
+        self.to(self.device)
+        self.model.to(self.device)
+
     @no_type_check
     def forward(self, obs: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
         if self.flatten_input:
             obs = obs.flatten(1)
-        return self.model(obs)
+        try:
+            return self.model(obs)
+        except RuntimeError:
+            raise
 
 
 class NetBase(nn.Module, ABC):
@@ -261,6 +267,7 @@ class Net(NetBase):
         else:
             self.output_dim = self.model.output_dim
             self.Q, self.V = None, None
+        self.to(self.device)
 
     def forward(
         self, obs: Union[np.ndarray, torch.Tensor], state: Any = None, **kwargs

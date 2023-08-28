@@ -16,7 +16,6 @@ from tianshou.utils.types import TOptimFactory
 
 log = logging.getLogger(__name__)
 
-
 def get_default_pl_callbacks(es_monitor: Optional[str] = "val_loss") -> list[Callback]:
     callbacks = []
     if es_monitor is not None:
@@ -25,12 +24,12 @@ def get_default_pl_callbacks(es_monitor: Optional[str] = "val_loss") -> list[Cal
         )
     return callbacks
 
-
 def get_default_pl_trainer(
     max_epochs: int,
     min_epochs=1,
     barebones=False,
     es_monitor: Optional[str] = "val_loss",
+    device="cpu",
 ) -> pl.Trainer:
     if barebones:
         if es_monitor is not None:
@@ -39,15 +38,17 @@ def get_default_pl_trainer(
                 "setting es_monitor to None"
             )
             es_monitor = None
-
+    accelerator = "gpu" if device == "cuda" else "cpu"
     callbacks = get_default_pl_callbacks(es_monitor=es_monitor)
+
+
     return pl.Trainer(
         min_epochs=min_epochs,
         max_epochs=max_epochs,
         barebones=barebones,
         callbacks=callbacks,
         devices=1,
-        accelerator="cpu",
+        accelerator=accelerator,
         enable_progress_bar=False,
         enable_checkpointing=False,
         enable_model_summary=False,
@@ -87,6 +88,9 @@ class PLTrainable(pl.LightningModule):
         # might actually point to the user-provided trainer in all cases
         self.pl_trainer = pl_trainer or get_default_pl_trainer(es_monitor=es_monitor)
 
+        self._module_device = next(module.parameters()).device
+        self.to(self._module_device)
+
     def configure_optimizers(self) -> Any:
         optim = self.optim_class(self.parameters(), lr=self.lr)
         result = {
@@ -119,7 +123,10 @@ class PLTrainable(pl.LightningModule):
         return self.loss_fn(v, Y)
 
     def forward(self, X: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        return self.module(X, *args, **kwargs)
+        result = self.module(X, *args, **kwargs)
+        # if torch.isnan(result).any():
+        #     raise RuntimeError("NaNs in critic output!")
+        return result
 
     def _reset_trainer(self):
         self.pl_trainer.fit_loop.epoch_progress.reset()
@@ -134,12 +141,22 @@ class PLTrainable(pl.LightningModule):
             val_dataloaders=val_dataloader,
         )
         losses = copy(self._train_losses)
+        # TODO: needed b/c Trainer.fit will eventually call Strategy.teardown,
+        #  which will move the model to the CPU.
+        #  Should eventually be solved by providing a modified strategy, but this
+        #  requires a lot of ptl subtleties to get right, so we don't do it for now...
+        #  One could also monkeypatch the trainer with
+        #  self.ptl_trainer.strategy.teardown = lambda: None
+        #  but this is too much black magic for my taste
+        self.to(self._module_device)
+        # if torch.isnan(next(self.parameters()).any()):
+        #     raise RuntimeError("NaNs in critic parameters!")
         self._train_losses = []
         return losses
 
     def _get_dataloaders(self, X: torch.Tensor, Y: torch.Tensor, batch_size: int):
-        X = torch.as_tensor(X, dtype=torch.float32)
-        Y = torch.as_tensor(Y, dtype=torch.float32)
+        X = torch.as_tensor(X, dtype=torch.float32, device=self.device)
+        Y = torch.as_tensor(Y, dtype=torch.float32, device=self.device)
 
         dataset = TensorDataset(X, Y)
 

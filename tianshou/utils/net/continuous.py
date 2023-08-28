@@ -28,6 +28,9 @@ class PreprocessNetWrapper(nn.Module):
         # for backward compatibility
         self.preprocess = preprocess_net
 
+        self.to(device)
+        self.preprocess_net.to(device)
+
 
 class Actor(PreprocessNetWrapper):
     """Simple actor network. Will create an actor operated in continuous \
@@ -132,6 +135,7 @@ class Critic(PreprocessNetWrapper):
             linear_layer=linear_layer,
             flatten_input=flatten_input,
         )
+        self.to(self.device)
 
     def forward(
         self,
@@ -212,9 +216,11 @@ class ActorProb(PreprocessNetWrapper):
                 device=self.device,
             )
         else:
-            self.sigma_param = nn.Parameter(torch.zeros(self.output_dim, 1))
+            self.sigma_param = nn.Parameter(torch.zeros(self.output_dim, 1, device=device))
         self.max_action = max_action
         self._unbounded = unbounded
+
+        self.to(device)
 
     def forward(
         self,

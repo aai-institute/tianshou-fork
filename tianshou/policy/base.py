@@ -383,6 +383,8 @@ class BasePolicy(ABC, nn.Module):
         end_flag = np.logical_or(batch.terminated, batch.truncated)
         end_flag[np.isin(indices, buffer.unfinished_index())] = True
         advantage = _gae_return(v_s, v_s_, rew, end_flag, gamma, gae_lambda)
+        if np.isnan(advantage).any():
+            raise ValueError("NaN detected in advantage value!")
         returns = advantage + v_s
         # normalization varies from each policy, so we don't do it here
         return returns, advantage
