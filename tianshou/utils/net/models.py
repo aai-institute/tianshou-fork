@@ -50,7 +50,7 @@ def get_default_pl_trainer(
         callbacks=callbacks,
         devices=1,
         accelerator=accelerator,
-        enable_progress_bar=False,
+        enable_progress_bar=True,
         enable_checkpointing=False,
         enable_model_summary=False,
         logger=False,
