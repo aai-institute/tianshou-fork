@@ -62,10 +62,14 @@ class ReplayBuffer:
         self._meta: Batch = Batch()
         self._ep_rew: Union[float, np.ndarray]
         self.state_normalizer = None
+        self.reward_normalizer = None
         self.reset()
 
     def set_state_normalizer(self, state_normalizer):
         self.state_normalizer = state_normalizer
+
+    def set_reward_normalizer(self, reward_normalizer):
+        self.reward_normalizer = reward_normalizer
 
     def __len__(self) -> int:
         """Return len(self)."""

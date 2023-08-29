@@ -67,6 +67,10 @@ class Collector:
         state_normaliser_factory: Optional[
             Union[Literal["running_mean"], Callable[[gym.Env], NormaliserProtocol]]
         ] = "running_mean",
+        reward_normaliser_factory: Optional[
+            Union[Literal["running_mean"], Callable[
+                [gym.Env], NormaliserProtocol]]
+        ] = "running_mean",
     ) -> None:
         super().__init__()
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
@@ -98,6 +102,18 @@ class Collector:
         else:
             self.state_normaliser = None
         self.buffer.set_state_normalizer(self.state_normaliser)
+
+        if reward_normaliser_factory == "running_mean":
+            self.reward_normaliser = RunningMeanStd(
+                mean=0,
+                std=1,
+                clip_max=np.inf,
+            )
+        elif reward_normaliser_factory is not None:
+            self.reward_normaliser = reward_normaliser_factory(env)
+        else:
+            self.reward_normaliser = None
+        self.buffer.set_reward_normalizer(self.reward_normaliser)
 
         # avoid creating attribute outside __init__
         self.reset(False)
@@ -421,6 +437,10 @@ class Collector:
             filled_buffer_idxs = np.unique(filled_buffer_idxs)
             new_obs = self.buffer.obs[filled_buffer_idxs]
             self.state_normaliser.update(new_obs)
+        if self.reward_normaliser is not None:
+            filled_buffer_idxs = np.unique(filled_buffer_idxs)
+            new_rew = self.buffer.rew[filled_buffer_idxs]
+            self.reward_normaliser.update(new_rew)
 
         return {
             "n/ep": episode_count,

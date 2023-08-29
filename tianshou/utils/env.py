@@ -5,6 +5,7 @@ import gymnasium as gym
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.env import ShmemVectorEnv, VectorEnvNormObs
+#from tianshou.env.venv_wrappers import VectorEnvNormRew
 from tianshou.policy import BasePolicy
 
 
@@ -71,6 +72,7 @@ def make_mujoco_env(
     num_train_envs: int,
     num_test_envs: int,
     obs_norm: Union[bool, int], #weather to normalise, int if we want normaliation with stale mean and var
+    #rew_norm: Union[bool, int],
     render_mode: Optional[Literal["human", "rgb_array"]] = None,
     clip_max:int = 10, #maximal value used in clipping in normalied, todo get rid of this
 ):
@@ -112,4 +114,11 @@ def make_mujoco_env(
         train_envs = VectorEnvNormObs(train_envs, update_obs_rms=int(obs_norm), clip_max=clip_max)
         test_envs = VectorEnvNormObs(test_envs, update_obs_rms=False)
         test_envs.set_obs_rms(train_envs.get_obs_rms())
+    #
+    # if bool(rew_norm):
+    #     # reward norm wrapper
+    #     train_envs = VectorEnvNormRew(train_envs, update_rew_rms=int(
+    #         rew_norm), clip_max=clip_max)
+    #     test_envs = VectorEnvNormRew(test_envs, update_rew_rms=False)
+    #     test_envs.set_rew_rms(train_envs.get_rew_rms())
     return env, train_envs, test_envs
