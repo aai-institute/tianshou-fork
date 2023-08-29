@@ -12,6 +12,18 @@ from tianshou.utils.net.continuous import ActorProb, Critic
 from tianshou.utils.types import TDevice, TOptimFactory, TShape
 
 
+def get_module_by_name(module: nn.Module, name: str) -> nn.Module:
+    names = name.split(".")
+    for n in names:
+        try:
+            module = getattr(module, n)
+        except AttributeError:
+            raise KeyError(f"Module {module} has no named module {n}")
+        if not isinstance(module, nn.Module):
+            raise KeyError(f"Expected to find a module named {n}, but found {module}")
+    return module
+
+
 def simple_nn_init(
     module: nn.Module,
     initializer: Callable[[torch.Tensor, ...], Optional[torch.Tensor]],
@@ -33,13 +45,11 @@ def simple_nn_init(
             if m.bias is not None:
                 torch.nn.init.zeros_(m.bias)
     for name in layers_to_scale:
+        layer = get_module_by_name(module, name)
         try:
-            layer = getattr(module, name)
+            layer.weight.data *= weight_scale
         except AttributeError:
-            raise KeyError(f"Module {module} has no named module {name}")
-        if not isinstance(layer, nn.Module):
-            raise KeyError(f"Expected to find a module named {name}, but found {layer}")
-        layer.weight.data *= weight_scale
+            raise KeyError(f"Module {layer} has no attribute weight")
 
 
 def resume_from_checkpoint(
