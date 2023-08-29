@@ -33,9 +33,7 @@ class MovAvg(object):
         self.cache: List[np.number] = []
         self.banned = [np.inf, np.nan, -np.inf]
 
-    def add(
-        self, data_array: Union[Number, np.number, list, np.ndarray, torch.Tensor]
-    ) -> float:
+    def add(self, data_array: Union[Number, np.number, list, np.ndarray, torch.Tensor]) -> float:
         """Add a scalar into :class:`MovAvg`.
 
         You can add ``torch.Tensor`` with only one element, a python scalar, or
@@ -49,7 +47,7 @@ class MovAvg(object):
             if number not in self.banned:
                 self.cache.append(number)
         if self.size > 0 and len(self.cache) > self.size:
-            self.cache = self.cache[-self.size:]
+            self.cache = self.cache[-self.size :]
         return self.get()
 
     def get(self) -> float:
@@ -68,9 +66,13 @@ class MovAvg(object):
             return 0.0
         return float(np.std(self.cache))  # type: ignore
 
+
 class NormaliserProtocol(Protocol):
-    def norm(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+    def norm(
+        self, data_array: Union[float, np.ndarray, torch.Tensor]
+    ) -> Union[float, np.ndarray, torch.Tensor]:
         pass
+
     def update(self, data_array: Union[np.ndarray, torch.Tensor]) -> None:
         pass
 
@@ -93,11 +95,11 @@ class RunningMeanStd(NormaliserProtocol):
         self,
         mean: Union[float, np.ndarray, torch.Tensor] = 0.0,
         std: Union[float, np.ndarray, torch.Tensor] = 1.0,
-        clip_max: Optional[float] = 10.0, #todo remove default and set it where it is used
+        clip_max: Optional[float] = 10.0,  # todo remove default and set it where it is used
         epsilon: float = np.finfo(np.float32).eps.item(),
         update_freq: int = 1,
     ) -> None:
-        self.mean, self.stale_mean, self.var, self.stale_var = mean,mean,std, std
+        self.mean, self.stale_mean, self.var, self.stale_var = mean, mean, std, std
         self.clip_max = clip_max
         self.count = 0
         self.eps = epsilon
@@ -115,11 +117,14 @@ class RunningMeanStd(NormaliserProtocol):
     def norm(self, arr: torch.Tensor) -> torch.Tensor:
         ...
 
-    def norm(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+    def norm(
+        self, data_array: Union[float, np.ndarray, torch.Tensor]
+    ) -> Union[float, np.ndarray, torch.Tensor]:
         data_array = (data_array - self.stale_mean) / np.sqrt(self.stale_var + self.eps)
         if self.clip_max:
             data_array = array_clip(data_array, -self.clip_max, self.clip_max)
         return data_array
+
     @overload
     def unnormalise(self, arr: float) -> float:
         ...
@@ -132,7 +137,9 @@ class RunningMeanStd(NormaliserProtocol):
     def unnormalise(self, arr: torch.Tensor) -> torch.Tensor:
         ...
 
-    def unnormalise(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+    def unnormalise(
+        self, data_array: Union[float, np.ndarray, torch.Tensor]
+    ) -> Union[float, np.ndarray, torch.Tensor]:
         data_array = data_array * np.sqrt(self.stale_var + self.eps) + self.stale_mean
         return data_array
 
@@ -148,11 +155,11 @@ class RunningMeanStd(NormaliserProtocol):
     def update_and_norm(self, arr: torch.Tensor) -> torch.Tensor:
         ...
 
-
-    def update_and_norm(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+    def update_and_norm(
+        self, data_array: Union[float, np.ndarray, torch.Tensor]
+    ) -> Union[float, np.ndarray, torch.Tensor]:
         self.update(data_array)
         return self.norm(data_array)
-
 
     def update(self, data_array: Union[np.ndarray, torch.Tensor]) -> None:
         """Add a batch of item into RMS with the same shape, modify mean/var/count."""
@@ -169,8 +176,7 @@ class RunningMeanStd(NormaliserProtocol):
         new_var = m_2 / total_count
 
         self.mean, self.var = new_mean, new_var
-        if self.count//self.update_freq != total_count//self.update_freq:
+        if self.count // self.update_freq != total_count // self.update_freq:
             self.stale_mean = copy(self.mean)
             self.stale_var = copy(self.var)
         self.count = total_count
-
