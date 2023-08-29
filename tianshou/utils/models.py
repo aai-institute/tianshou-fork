@@ -35,7 +35,8 @@ def simple_nn_init(
 
     :param module: the module to initialize
     :param initializer: a function that takes a tensor and initializes it
-    :param layers_to_scale: layer names to be scale sby `weight_scale`
+    :param layers_to_scale: layer names to be scale by `weight_scale`. The bias
+        parameters of these layers will be zeroed.
     :param weight_scale: the scale to apply to the weights of layers in `layers_to_scale`
     :param initializer_kwargs: keyword arguments to pass to the initializer
     """
@@ -48,8 +49,9 @@ def simple_nn_init(
         layer = get_module_by_name(module, name)
         try:
             layer.weight.data *= weight_scale
+            layer.bias.data *= 0.0
         except AttributeError:
-            raise KeyError(f"Module {layer} has no attribute weight")
+            raise KeyError(f"Module {layer} has no attribute weight or bias")
 
 
 def resume_from_checkpoint(
