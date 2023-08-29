@@ -120,6 +120,39 @@ class RunningMeanStd(NormaliserProtocol):
         if self.clip_max:
             data_array = array_clip(data_array, -self.clip_max, self.clip_max)
         return data_array
+    @overload
+    def unnormalise(self, arr: float) -> float:
+        ...
+
+    @overload
+    def unnormalise(self, arr: np.ndarray) -> np.ndarray:
+        ...
+
+    @overload
+    def unnormalise(self, arr: torch.Tensor) -> torch.Tensor:
+        ...
+
+    def unnormalise(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+        data_array = data_array * np.sqrt(self.stale_var + self.eps) + self.stale_mean
+        return data_array
+
+    @overload
+    def update_and_norm(self, arr: float) -> float:
+        ...
+
+    @overload
+    def update_and_norm(self, arr: np.ndarray) -> np.ndarray:
+        ...
+
+    @overload
+    def update_and_norm(self, arr: torch.Tensor) -> torch.Tensor:
+        ...
+
+
+    def update_and_norm(self, data_array: Union[float, np.ndarray, torch.Tensor]) -> Union[float, np.ndarray, torch.Tensor]:
+        self.update(data_array)
+        return self.norm(data_array)
+
 
     def update(self, data_array: Union[np.ndarray, torch.Tensor]) -> None:
         """Add a batch of item into RMS with the same shape, modify mean/var/count."""
