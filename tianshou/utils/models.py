@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, Optional, Sequence, Union, List
 
 import numpy as np
 import torch
@@ -15,12 +15,16 @@ from tianshou.utils.types import TDevice, TOptimFactory, TShape
 def simple_nn_init(
     module: nn.Module,
     initializer: Callable[[torch.Tensor, ...], Optional[torch.Tensor]],
+    layers_to_scale:List[str] = [],
+    weight_scale: float = 1.0,
     **initializer_kwargs,
 ):
     """Initializes the weights of a module with a given initializer.
 
     :param module: the module to initialize
     :param initializer: a function that takes a tensor and initializes it
+    :param layers_to_scale: list of layer names to scale by `weight_scale`
+    :param weight_scale: the scale to apply to the weights of layers in `layers_to_scale`
     :param initializer_kwargs: keyword arguments to pass to the initializer
     """
     for m in module.modules():
@@ -28,6 +32,9 @@ def simple_nn_init(
             initializer(m.weight, **initializer_kwargs)
             if m.bias is not None:
                 torch.nn.init.zeros_(m.bias)
+    for name, param in module.named_parameters():
+        if name in layers_to_scale:
+            param.data *= weight_scale
 
 
 def resume_from_checkpoint(
