@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Sequence, Union, List
+from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -15,7 +15,7 @@ from tianshou.utils.types import TDevice, TOptimFactory, TShape
 def simple_nn_init(
     module: nn.Module,
     initializer: Callable[[torch.Tensor, ...], Optional[torch.Tensor]],
-    layers_to_scale:List[str] = [],
+    layers_to_scale: Sequence[str] = (),
     weight_scale: float = 1.0,
     **initializer_kwargs,
 ):
@@ -23,7 +23,7 @@ def simple_nn_init(
 
     :param module: the module to initialize
     :param initializer: a function that takes a tensor and initializes it
-    :param layers_to_scale: list of layer names to scale by `weight_scale`
+    :param layers_to_scale: layer names to be scale sby `weight_scale`
     :param weight_scale: the scale to apply to the weights of layers in `layers_to_scale`
     :param initializer_kwargs: keyword arguments to pass to the initializer
     """
@@ -32,9 +32,14 @@ def simple_nn_init(
             initializer(m.weight, **initializer_kwargs)
             if m.bias is not None:
                 torch.nn.init.zeros_(m.bias)
-    for name, param in module.named_parameters():
-        if name in layers_to_scale:
-            param.data *= weight_scale
+    for name in layers_to_scale:
+        try:
+            layer = getattr(module, name)
+        except AttributeError:
+            raise KeyError(f"Module {module} has no named module {name}")
+        if not isinstance(layer, nn.Module):
+            raise KeyError(f"Expected to find a module named {name}, but found {layer}")
+        layer.weight.data *= weight_scale
 
 
 def resume_from_checkpoint(
@@ -65,13 +70,9 @@ def get_actor_critic(
     activation_c: Union[ModuleType, Sequence[ModuleType]] = nn.Tanh,
     device: TDevice = "cpu",
 ):
-    net_a = Net(
-        state_shape, hidden_sizes=hidden_sizes, activation=activation_a, device=device
-    )
+    net_a = Net(state_shape, hidden_sizes=hidden_sizes, activation=activation_a, device=device)
     actor = ActorProb(net_a, action_shape, unbounded=True, device=device)
-    net_c = Net(
-        state_shape, hidden_sizes=hidden_sizes, activation=activation_c, device=device
-    )
+    net_c = Net(state_shape, hidden_sizes=hidden_sizes, activation=activation_c, device=device)
     critic = Critic(net_c)
     return actor, critic
 

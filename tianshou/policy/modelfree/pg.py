@@ -81,6 +81,8 @@ class PGPolicy(BasePolicy):
         assert 0.0 <= discount_factor <= 1.0, "discount factor should be in [0, 1]"
         self._gamma = discount_factor
         self._rew_norm = reward_normalization
+        # TODO: default clipping value cannot be adjusted!
+        # See https://github.com/thu-ml/tianshou/issues/927
         self.ret_rms = RunningMeanStd()
         self._eps = 1e-8
         self._deterministic_eval = deterministic_eval
