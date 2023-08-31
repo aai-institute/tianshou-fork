@@ -307,7 +307,8 @@ class BaseTrainer(ABC):
                     result["n/ep"] = len(self.buffer)
                     result["n/st"] = int(self.gradient_step)
                     t.update()
-
+                for callback in self.on_step_callbacks:
+                    callback({**result, **data})
                 self.policy_update_fn(data, result)
                 t.set_postfix(**data)
 
