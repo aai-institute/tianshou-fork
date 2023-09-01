@@ -1,17 +1,29 @@
 import warnings
-from typing import Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Protocol, Tuple, Union, runtime_checkable
 
-import gymnasium as gym
+import numpy as np
+
+try:
+    import gymnasium as gym
+except ImportError:
+    import gym
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.env import ShmemVectorEnv, VectorEnvNormObs
 from tianshou.policy import BasePolicy
 
 
+@runtime_checkable
+class BoxProtocol(Protocol):
+    shape: Tuple[int]
+    high: np.ndarray
+    low: np.ndarray
+
+
 def get_continuous_env_info(
     env: gym.Env,
 ) -> Tuple[Tuple[int, ...], Tuple[int, ...], float]:
-    if not isinstance(env.action_space, gym.spaces.Box):
+    if not isinstance(env.action_space, BoxProtocol):
         raise ValueError(
             "Only environments with continuous action space are supported here. "
             f"But got env with action space: {env.action_space.__class__}."
@@ -70,9 +82,10 @@ def make_mujoco_env(
     seed: int,
     num_train_envs: int,
     num_test_envs: int,
-    obs_norm: Union[bool, int], #weather to normalise, int if we want normaliation with stale mean and var
+    # TODO: remove int option
+    obs_norm: Union[bool, int] = True,  # whether to normalize, int if we want normalization with stale mean and var
     render_mode: Optional[Literal["human", "rgb_array"]] = None,
-    clip_max:int = 10, #maximal value used in clipping in normalied, todo get rid of this
+    clip_max: int = 10,  # maximal value used in clipping in normalized, todo get rid of this
 ):
     """Wrapper function for Mujoco env.
 
