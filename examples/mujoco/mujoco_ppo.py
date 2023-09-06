@@ -90,7 +90,10 @@ def main(
 
     # Setup NNs
     actor, critic = get_actor_critic(
-        state_shape, nn_config.hidden_sizes, action_shape, experiment_config.device
+        state_shape=state_shape,
+        hidden_sizes=nn_config.hidden_sizes,
+        action_shape=action_shape,
+        device=experiment_config.device,
     )
     optim = init_and_get_optim(actor, critic, nn_config.lr)
 

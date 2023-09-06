@@ -82,6 +82,7 @@ def get_actor_critic(
     activation_c: Union[ModuleType, Sequence[ModuleType]] = nn.Tanh,
     device: TDevice = "cpu",
 ):
+    hidden_sizes = (int(i) for i in hidden_sizes)
     net_a = Net(state_shape, hidden_sizes=hidden_sizes, activation=activation_a, device=device)
     actor = ActorProb(net_a, action_shape, unbounded=True, device=device)
     net_c = Net(state_shape, hidden_sizes=hidden_sizes, activation=activation_c, device=device)
