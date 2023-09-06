@@ -499,10 +499,10 @@ class BaseTrainer(ABC):
                 self.best_reward,
                 self.best_reward_std,
             )
-        finally:
-            self.is_run = False
             for callback in self.final_step_callbacks:
                 callback({**info})
+        finally:
+            self.is_run = False
 
         return info
 
