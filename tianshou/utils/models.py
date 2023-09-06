@@ -12,15 +12,32 @@ from tianshou.utils.net.continuous import ActorProb, Critic
 from tianshou.utils.types import TDevice, TOptimFactory, TShape
 
 
+def get_module_by_name(module: nn.Module, name: str) -> nn.Module:
+    names = name.split(".")
+    for n in names:
+        try:
+            module = getattr(module, n)
+        except AttributeError:
+            raise KeyError(f"Module {module} has no named module {n}")
+        if not isinstance(module, nn.Module):
+            raise KeyError(f"Expected to find a module named {n}, but found {module}")
+    return module
+
+
 def simple_nn_init(
     module: nn.Module,
     initializer: Callable[[torch.Tensor, ...], Optional[torch.Tensor]],
+    layers_to_scale: Sequence[str] = (),
+    weight_scale: float = 1.0,
     **initializer_kwargs,
 ):
     """Initializes the weights of a module with a given initializer.
 
     :param module: the module to initialize
     :param initializer: a function that takes a tensor and initializes it
+    :param layers_to_scale: layer names to be scale by `weight_scale`. The bias
+        parameters of these layers will be zeroed.
+    :param weight_scale: the scale to apply to the weights of layers in `layers_to_scale`
     :param initializer_kwargs: keyword arguments to pass to the initializer
     """
     for m in module.modules():
@@ -28,6 +45,13 @@ def simple_nn_init(
             initializer(m.weight, **initializer_kwargs)
             if m.bias is not None:
                 torch.nn.init.zeros_(m.bias)
+    for name in layers_to_scale:
+        layer = get_module_by_name(module, name)
+        try:
+            layer.weight.data *= weight_scale
+            layer.bias.data *= 0.0
+        except AttributeError:
+            raise KeyError(f"Module {layer} has no attribute weight or bias")
 
 
 def resume_from_checkpoint(
@@ -58,13 +82,9 @@ def get_actor_critic(
     activation_c: Union[ModuleType, Sequence[ModuleType]] = nn.Tanh,
     device: TDevice = "cpu",
 ):
-    net_a = Net(
-        state_shape, hidden_sizes=hidden_sizes, activation=activation_a, device=device
-    )
+    net_a = Net(state_shape, hidden_sizes=hidden_sizes, activation=activation_a, device=device)
     actor = ActorProb(net_a, action_shape, unbounded=True, device=device)
-    net_c = Net(
-        state_shape, hidden_sizes=hidden_sizes, activation=activation_c, device=device
-    )
+    net_c = Net(state_shape, hidden_sizes=hidden_sizes, activation=activation_c, device=device)
     critic = Critic(net_c)
     return actor, critic
 

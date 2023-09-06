@@ -67,6 +67,10 @@ class Collector:
         state_normaliser_factory: Optional[
             Union[Literal["running_mean"], Callable[[gym.Env], NormaliserProtocol]]
         ] = "running_mean",
+        reward_normaliser_factory: Optional[
+            Union[Literal["running_mean"], Callable[
+                [gym.Env], NormaliserProtocol]]
+        ] = "running_mean",
     ) -> None:
         super().__init__()
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
@@ -84,7 +88,10 @@ class Collector:
         self._num_collected_steps = 0
         # todo think of a principled way and if we do need this
         if state_normaliser_factory == "running_mean":
-            observation_shape = self.env.observation_space[0].shape
+            box = self.env.observation_space
+            if not hasattr(box, "shape"):
+                box = box[0]
+            observation_shape = box.shape
             self.state_normaliser = RunningMeanStd(
                 mean=np.zeros(observation_shape),
                 std=np.ones(observation_shape),
@@ -95,6 +102,18 @@ class Collector:
         else:
             self.state_normaliser = None
         self.buffer.set_state_normalizer(self.state_normaliser)
+
+        if reward_normaliser_factory == "running_mean":
+            self.reward_normaliser = RunningMeanStd(
+                mean=0,
+                std=1,
+                clip_max=np.inf,
+            )
+        elif reward_normaliser_factory is not None:
+            self.reward_normaliser = reward_normaliser_factory(env)
+        else:
+            self.reward_normaliser = None
+        self.buffer.set_reward_normalizer(self.reward_normaliser)
 
         # avoid creating attribute outside __init__
         self.reset(False)
@@ -171,9 +190,7 @@ class Collector:
         gym_reset_kwargs = gym_reset_kwargs if gym_reset_kwargs else {}
         obs, info = self.env.reset(**gym_reset_kwargs)
         if self.preprocess_fn:
-            processed_data = self.preprocess_fn(
-                obs=obs, info=info, env_id=np.arange(self.env_num)
-            )
+            processed_data = self.preprocess_fn(obs=obs, info=info, env_id=np.arange(self.env_num))
             obs = processed_data.get("obs", obs)
             info = processed_data.get("info", info)
         self.data.info = info
@@ -199,9 +216,7 @@ class Collector:
         gym_reset_kwargs = gym_reset_kwargs if gym_reset_kwargs else {}
         obs_reset, info = self.env.reset(global_ids, **gym_reset_kwargs)
         if self.preprocess_fn:
-            processed_data = self.preprocess_fn(
-                obs=obs_reset, info=info, env_id=global_ids
-            )
+            processed_data = self.preprocess_fn(obs=obs_reset, info=info, env_id=global_ids)
             obs_reset = processed_data.get("obs", obs_reset)
             info = processed_data.get("info", info)
         self.data.info[local_ids] = info
@@ -367,9 +382,7 @@ class Collector:
                 ep_start_idxs.append(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
-                self._reset_env_with_ids(
-                    env_ind_local, env_ind_global, gym_reset_kwargs
-                )
+                self._reset_env_with_ids(env_ind_local, env_ind_global, gym_reset_kwargs)
                 for i in env_ind_local:
                     self._reset_state(i)
 
@@ -385,9 +398,7 @@ class Collector:
 
             self.data.obs = self.data.obs_next
 
-            if (n_step and step_count >= n_step) or (
-                n_episode and episode_count >= n_episode
-            ):
+            if (n_step and step_count >= n_step) or (n_episode and episode_count >= n_episode):
                 break
 
         # generate statistics
@@ -426,6 +437,10 @@ class Collector:
             filled_buffer_idxs = np.unique(filled_buffer_idxs)
             new_obs = self.buffer.obs[filled_buffer_idxs]
             self.state_normaliser.update(new_obs)
+        if self.reward_normaliser is not None:
+            filled_buffer_idxs = np.unique(filled_buffer_idxs)
+            new_rew = self.buffer.rew[filled_buffer_idxs]
+            self.reward_normaliser.update(new_rew)
 
         return {
             "n/ep": episode_count,
@@ -631,9 +646,7 @@ class AsyncCollector(Collector):
                     time.sleep(render)
 
             # add data into the buffer
-            ptr, ep_rew, ep_len, ep_idx = self.buffer.add(
-                self.data, buffer_ids=ready_env_ids
-            )
+            ptr, ep_rew, ep_len, ep_idx = self.buffer.add(self.data, buffer_ids=ready_env_ids)
 
             # collect statistics
             step_count += len(ready_env_ids)
@@ -647,9 +660,7 @@ class AsyncCollector(Collector):
                 episode_start_indices.append(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
-                self._reset_env_with_ids(
-                    env_ind_local, env_ind_global, gym_reset_kwargs
-                )
+                self._reset_env_with_ids(env_ind_local, env_ind_global, gym_reset_kwargs)
                 for i in env_ind_local:
                     self._reset_state(i)
 
@@ -664,9 +675,7 @@ class AsyncCollector(Collector):
                 whole_data[ready_env_ids] = self.data  # lots of overhead
             self.data = whole_data
 
-            if (n_step and step_count >= n_step) or (
-                n_episode and episode_count >= n_episode
-            ):
+            if (n_step and step_count >= n_step) or (n_episode and episode_count >= n_episode):
                 break
 
         self._ready_env_ids = ready_env_ids

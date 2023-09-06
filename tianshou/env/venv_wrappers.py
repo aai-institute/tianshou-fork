@@ -111,3 +111,51 @@ class VectorEnvNormObs(VectorEnvWrapper):
     def get_obs_rms(self) -> RunningMeanStd:
         """Return observation running mean/std."""
         return self.obs_rms
+
+# class VectorEnvNormRew(VectorEnvWrapper):
+#     """An reward normalization wrapper for vectorized environments.
+#
+#     :param bool update_rew_rms: whether to update rew_rms. Default to True.
+#     """
+#     #todo how to deal properly with this clip max value?
+#     def __init__(self, venv: BaseVectorEnv, update_rew_rms: Union[bool,
+#     int] = True, clip_max = np.inf) -> None:
+#         super().__init__(venv)
+#         # initialize observation running mean/std
+#         self.update_rew_rms = bool(update_rew_rms)
+#         self.rew_rms = RunningMeanStd(clip_max=clip_max,
+#                                       update_freq=int(update_rew_rms))
+#
+#     def reset(
+#         self, id: Optional[Union[int, List[int], np.ndarray]] = None, **kwargs: Any
+#     ) -> Tuple[np.ndarray, Union[dict, List[dict]]]:
+#         obs, info = self.venv.reset(id, **kwargs)
+#
+#         if isinstance(obs, tuple):  # type: ignore
+#             raise TypeError(
+#                 "Tuple observation space is not supported. ",
+#                 "Please change it to array or dict space",
+#             )
+#         return obs, info
+#
+#     def step(
+#         self, action: np.ndarray, id: Optional[Union[int, List[int], np.ndarray]] = None
+#     ) -> gym_new_venv_step_type:
+#         step_results = self.venv.step(action, id)
+#         if self.rew_rms and self.update_rew_rms:
+#             self.rew_rms.update(step_results[1])
+#         return (step_results[:1], self.rew_rms.norm(step_results[1])
+#         *step_results[1:])
+#
+#     def _norm_rew(self, rew: float) -> float:
+#         if self.rew_rms:
+#             return self.rew_rms.norm(rew)  # type: ignore
+#         return rew
+#
+#     def set_rew_rms(self, rew_rms: RunningMeanStd) -> None:
+#         """Set with given rew running mean/std."""
+#         self.rew_rms = rew_rms
+#
+#     def get_rew_rms(self) -> RunningMeanStd:
+#         """Return observation running mean/std."""
+#         return self.rew_rms

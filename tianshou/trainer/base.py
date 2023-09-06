@@ -1,7 +1,8 @@
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
+from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union, \
+    Sequence
 
 import numpy as np
 import tqdm
@@ -92,6 +93,9 @@ class BaseTrainer(ABC):
         show_progress: bool = True,
         test_in_train: bool = True,
         save_fn: Optional[Callable[[BasePolicy], None]] = None,
+        on_step_callbacks: Sequence[Callable[[dict], None]] = (),
+        final_step_callbacks: Sequence[Callable[[dict], None]] = (),
+
     ):
         """An iterator base class for trainers procedure.
 
@@ -212,6 +216,9 @@ class BaseTrainer(ABC):
         self.stop_fn_flag = False
         self.iter_num = 0
 
+        self.on_step_callbacks = on_step_callbacks
+        self.final_step_callbacks = final_step_callbacks
+
     def reset(self) -> None:
         """Initialize or reset the instance to yield a new iterator from zero."""
         self.is_run = False
@@ -292,6 +299,8 @@ class BaseTrainer(ABC):
             total=self.step_per_epoch, desc=f"Epoch #{self.epoch}", **tqdm_config
         ) as t:
             while t.n < t.total and not self.stop_fn_flag:
+                # TODO: data and result are very similar to each other, shouldn't return both.
+                #  Maybe switch to dataclasses instead of dicts?
                 data: Dict[str, Any] = dict()
                 result: Dict[str, Any] = dict()
                 if self.train_collector is not None:
@@ -307,7 +316,8 @@ class BaseTrainer(ABC):
                     result["n/ep"] = len(self.buffer)
                     result["n/st"] = int(self.gradient_step)
                     t.update()
-
+                for callback in self.on_step_callbacks:
+                    callback({**result, **data})
                 self.policy_update_fn(data, result)
                 t.set_postfix(**data)
 
@@ -491,6 +501,8 @@ class BaseTrainer(ABC):
             )
         finally:
             self.is_run = False
+            for callback in self.final_step_callbacks:
+                callback({**info})
 
         return info
 
