@@ -9,7 +9,7 @@ except ImportError:
     import gym
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
-from tianshou.env import ShmemVectorEnv, VectorEnvNormObs
+from tianshou.env import ShmemVectorEnv, VectorEnvNormObs, SubprocVectorEnv
 #from tianshou.env.venv_wrappers import VectorEnvNormRew
 from tianshou.policy import BasePolicy
 
@@ -40,8 +40,8 @@ def get_continuous_env_info(
 def get_train_test_collector(
     buffer_size: int,
     policy: BasePolicy,
-    train_envs: VectorEnvNormObs,
-    test_envs: VectorEnvNormObs,
+    train_envs: Optional[VectorEnvNormObs]=None,
+    test_envs: Optional[VectorEnvNormObs]=None,
     start_timesteps: int = 0,
     start_timesteps_random: bool = True,
 ):
@@ -58,12 +58,18 @@ def get_train_test_collector(
         Only relevant if start_timesteps > 0.
     :return: train and test collectors
     """
+    if test_envs!=None:
+        test_collector = Collector(policy, test_envs)
+    else:
+        test_collector = None
+    if train_envs==None:
+        return None, test_collector
+
     if len(train_envs) > 1:
         buffer = VectorReplayBuffer(buffer_size, len(train_envs))
     else:
         buffer = ReplayBuffer(buffer_size)
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
-    test_collector = Collector(policy, test_envs)
     if start_timesteps > 0:
         train_collector.collect(n_step=start_timesteps, random=start_timesteps_random)
     return train_collector, test_collector
@@ -135,3 +141,24 @@ def make_mujoco_env(
     #     test_envs = VectorEnvNormRew(test_envs, update_rew_rms=False)
     #     test_envs.set_rew_rms(train_envs.get_rew_rms())
     return env, train_envs, test_envs
+
+def make_test_env(
+    task: str,
+    seed: int,
+    num_test_envs: int):
+    try:
+        import envpool
+        test_envs = env = envpool.make_gymnasium(task, num_envs=num_test_envs, seed=seed)
+    except ImportError:
+        warnings.warn(
+            "Recommend using envpool (pip install envpool) "
+            "to run Mujoco environments more efficiently."
+        )
+        test_envs = SubprocVectorEnv(
+            [lambda: gym.make(task) for _ in range(num_test_envs)]
+        )
+        test_envs.seed(seed)
+        env = gym.make(task, render_mode=None)
+
+    #todo maybe deal with obs standardisation here
+    return env,test_envs
