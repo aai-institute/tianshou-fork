@@ -20,7 +20,7 @@ from tianshou.utils.net.continuous import ActorProb, Critic
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="Ant-v3")
+    parser.add_argument("--task", type=str, default="HalfCheetah-v4")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--buffer-size", type=int, default=1000000)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[256, 256])
@@ -33,13 +33,13 @@ def get_args():
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--start-timesteps", type=int, default=10000)
     parser.add_argument("--epoch", type=int, default=200)
-    parser.add_argument("--step-per-epoch", type=int, default=5000)
+    parser.add_argument("--step-per-epoch", type=int, default=10000)
     parser.add_argument("--step-per-collect", type=int, default=1)
     parser.add_argument("--update-per-step", type=int, default=1)
     parser.add_argument("--n-step", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--training-num", type=int, default=1)
-    parser.add_argument("--test-num", type=int, default=10)
+    parser.add_argument("--training-num", type=int, default=5)
+    parser.add_argument("--test-num", type=int, default=1)
     parser.add_argument("--logdir", type=str, default="log")
     parser.add_argument("--render", type=float, default=0.0)
     parser.add_argument(
@@ -62,6 +62,7 @@ def get_args():
         action="store_true",
         help="watch the play of pre-trained policy only",
     )
+    parser.add_argument("--train_episode_len", type=int, default=1000)
     return parser.parse_args()
 
 
@@ -72,6 +73,7 @@ def test_sac(args=get_args()):
         args.training_num,
         args.test_num,
         obs_norm=False,
+        train_episode_len=args.train_episode_len
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
@@ -149,6 +151,7 @@ def test_sac(args=get_args()):
     now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
     args.algo_name = "sac"
     log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
+    log_name += f"_train_len:{args.train_episode_len}"
     log_path = os.path.join(args.logdir, log_name)
 
     # logger

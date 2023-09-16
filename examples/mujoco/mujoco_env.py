@@ -10,7 +10,7 @@ except ImportError:
     envpool = None
 
 
-def make_mujoco_env(task, seed, training_num, test_num, obs_norm):
+def make_mujoco_env(task, seed, training_num, test_num, obs_norm, train_episode_len=1000):
     """Wrapper function for Mujoco env.
 
     If EnvPool is installed, it will automatically switch to EnvPool's Mujoco env.
@@ -18,7 +18,9 @@ def make_mujoco_env(task, seed, training_num, test_num, obs_norm):
     :return: a tuple of (single env, training envs, test envs).
     """
     if envpool is not None:
-        train_envs = env = envpool.make_gymnasium(task, num_envs=training_num, seed=seed)
+        train_envs = env = envpool.make_gymnasium(
+            task, num_envs=training_num, seed=seed, max_episode_steps=train_episode_len,
+        )
         test_envs = envpool.make_gymnasium(task, num_envs=test_num, seed=seed)
     else:
         warnings.warn(
