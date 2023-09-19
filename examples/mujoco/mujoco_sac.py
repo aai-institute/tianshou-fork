@@ -2,8 +2,10 @@
 
 import argparse
 import datetime
+import logging
 import os
 import pprint
+from typing import Any
 
 import numpy as np
 import torch
@@ -16,6 +18,29 @@ from tianshou.trainer import OffpolicyTrainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
+
+try:
+    import nni
+
+    nni_available = True
+
+
+except:
+    nni_available = False
+
+
+# Retrieve NNI params
+params = {}
+if nni_available:
+    optimized_params = nni.get_next_parameter()
+    params.update(optimized_params)
+else:
+    logging.warning("NNI not available, using default params")
+
+
+def update_args_from_params(args, params: dict[str, Any]):
+    for key, value in params.items():
+        setattr(args, key, value)
 
 
 def get_args():
@@ -67,13 +92,21 @@ def get_args():
 
 
 def test_sac(args=get_args()):
+    update_args_from_params(args, params)
+    unused_params = set(params).difference(vars(args))
+    if unused_params:
+        raise ValueError(
+            f"Unused params: {unused_params} \n"
+            f"Params: {params}\n"
+            f"Flat config: {vars(args)}\n"
+        )
     env, train_envs, test_envs = make_mujoco_env(
         args.task,
         args.seed,
         args.training_num,
         args.test_num,
         obs_norm=False,
-        train_episode_len=args.train_episode_len
+        train_episode_len=args.train_episode_len,
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
@@ -147,6 +180,11 @@ def test_sac(args=get_args()):
     test_collector = Collector(policy, test_envs)
     train_collector.collect(n_step=args.start_timesteps, random=True)
 
+    # update logdir to eventually use nni
+    if nni_available:
+        nni_out_dir = os.environ["NNI_OUTPUT_DIR"]
+        assert nni_out_dir
+        args.logdir = os.path.join(nni_out_dir, "tensorboard")
     # log
     now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
     args.algo_name = "sac"

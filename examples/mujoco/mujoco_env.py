@@ -19,7 +19,10 @@ def make_mujoco_env(task, seed, training_num, test_num, obs_norm, train_episode_
     """
     if envpool is not None:
         train_envs = env = envpool.make_gymnasium(
-            task, num_envs=training_num, seed=seed, max_episode_steps=train_episode_len,
+            task,
+            num_envs=training_num,
+            seed=seed,
+            max_episode_steps=train_episode_len,
         )
         test_envs = envpool.make_gymnasium(task, num_envs=test_num, seed=seed)
     else:
@@ -30,7 +33,7 @@ def make_mujoco_env(task, seed, training_num, test_num, obs_norm, train_episode_
         env = gym.make(task)
         train_envs = ShmemVectorEnv([lambda: gym.make(task) for _ in range(training_num)])
         test_envs = ShmemVectorEnv([lambda: gym.make(task) for _ in range(test_num)])
-        env.seed(seed)
+        # env.seed(seed) todo make this proper with hc envs
         train_envs.seed(seed)
         test_envs.seed(seed)
     if obs_norm:

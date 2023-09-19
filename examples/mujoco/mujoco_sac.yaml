@@ -1,0 +1,33 @@
+experimentName: awr_apa_comparison
+experiment_working_directory: /raid/rl/nni_experiments
+search_space:
+  train_episode_len:
+    _type: choice
+    _value: [20,40,60,80,100,200,300,400,600,800,1000,1200,1500,2000]
+  seed:
+    _type: choice
+    _value: [21,22,23,24,99]
+  epoch:
+    _type: choice
+    _value: [400]
+  task:
+    _type: choice
+    _value: ["HalfCheetah-v4" ]
+
+trial_command: python mujoco_sac.py
+trial_code_directory: .
+
+trial_concurrency: 70
+max_trial_number: 500
+trialGpuNumber: 1
+
+tuner:
+  name: TPE
+  class_args:
+    optimize_mode: maximize
+
+training_service:
+  platform: local
+  maxTrialNumberPerGpu: 6
+  useActiveGpu: False
+
