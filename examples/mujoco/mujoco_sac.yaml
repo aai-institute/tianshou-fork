@@ -1,4 +1,4 @@
-experimentName: awr_apa_comparison
+experimentName: HorizonExperimentsSAC
 experiment_working_directory: /raid/rl/nni_experiments
 search_space:
   train_episode_len:
