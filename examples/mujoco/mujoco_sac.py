@@ -23,23 +23,24 @@ try:
     import nni
 
     nni_available = True
-
-
-except:
+except ImportError:
     nni_available = False
-
 
 # Retrieve NNI params
 params = {}
 if nni_available:
-    optimized_params = nni.get_next_parameter()
-    params.update(optimized_params)
+    nni_params = nni.get_next_parameter()
+    params.update(nni_params)
 else:
     logging.warning("NNI not available, using default params")
 
 
-def update_args_from_params(args, params: dict[str, Any]):
+def update_args_from_params(args: argparse.Namespace, params: dict[str, Any]):
     for key, value in params.items():
+        if key not in args:
+            raise KeyError(
+                f"Unknown updated param: {key=}",
+            )
         setattr(args, key, value)
 
 
@@ -92,14 +93,14 @@ def get_args():
 
 
 def test_sac(args=get_args()):
-    update_args_from_params(args, params)
     unused_params = set(params).difference(vars(args))
     if unused_params:
         raise ValueError(
             f"Unused params: {unused_params} \n"
             f"Params: {params}\n"
-            f"Flat config: {vars(args)}\n"
+            f"Flat config: {vars(args)}\n",
         )
+    update_args_from_params(args, params)
     env, train_envs, test_envs = make_mujoco_env(
         args.task,
         args.seed,
