@@ -103,7 +103,7 @@ def test_ddpg(args=get_args()):
             config=args,
             project=args.wandb_project,
         )
-        logger.wandb_run.config.setdefaults(vars(args))
+        logger.wandb_run._config.setdefaults(vars(args))
         args = argparse.Namespace(**wandb.config)
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))

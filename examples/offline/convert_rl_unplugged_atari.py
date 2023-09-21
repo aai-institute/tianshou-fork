@@ -38,7 +38,7 @@ from tqdm import tqdm
 
 from tianshou.data import Batch
 
-tf.config.set_visible_devices([], "GPU")
+tf._config.set_visible_devices([], "GPU")
 
 # 9 tuning games.
 TUNING_SUITE = [
