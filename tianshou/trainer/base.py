@@ -1,3 +1,4 @@
+import logging
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
@@ -18,6 +19,9 @@ from tianshou.utils import (
     deprecation,
     tqdm_config,
 )
+
+
+log = logging.getLogger(__name__)
 
 
 class BaseTrainer(ABC):
@@ -95,7 +99,7 @@ class BaseTrainer(ABC):
         save_fn: Optional[Callable[[BasePolicy], None]] = None,
         on_step_callbacks: Sequence[Callable[[dict], None]] = (),
         final_step_callbacks: Sequence[Callable[[dict], None]] = (),
-
+        early_stopping_callback: Optional[Callable[[list[dict]], bool]] = None,
     ):
         """An iterator base class for trainers procedure.
 
@@ -218,6 +222,9 @@ class BaseTrainer(ABC):
 
         self.on_step_callbacks = on_step_callbacks
         self.final_step_callbacks = final_step_callbacks
+        self.early_stopping_callback = early_stopping_callback
+
+        self._train_results_history = deque(maxlen=10000)
 
     def reset(self) -> None:
         """Initialize or reset the instance to yield a new iterator from zero."""
@@ -320,6 +327,13 @@ class BaseTrainer(ABC):
                     callback({**result, **data})
                 self.policy_update_fn(data, result)
                 t.set_postfix(**data)
+
+                self._train_results_history.append(result)
+                if self.early_stopping_callback:
+                    if self.early_stopping_callback(list(self._train_results_history)):
+                        log.warning("Early stopping triggered")
+                        self.stop_fn_flag = True
+                        break
 
             if t.n <= t.total and not self.stop_fn_flag:
                 t.update()
