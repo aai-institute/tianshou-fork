@@ -64,6 +64,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 black = "^23.7.0"
 jinja2 = "*"
+jupyter = "^1.0.0"
 mypy = "^1.4.1"
 # networkx is used in a test
 networkx = "*"
