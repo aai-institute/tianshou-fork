@@ -152,3 +152,5 @@ videos/
 
 # might be needed for IDE plugins that can't read ruff config
 .flake8
+
+notebooks/_build/
