@@ -6,14 +6,24 @@
 
 [![PyPI](https://img.shields.io/pypi/v/tianshou)](https://pypi.org/project/tianshou/) [![Conda](https://img.shields.io/conda/vn/conda-forge/tianshou)](https://github.com/conda-forge/tianshou-feedstock) [![Read the Docs](https://img.shields.io/readthedocs/tianshou)](https://tianshou.readthedocs.io/en/master) [![Read the Docs](https://img.shields.io/readthedocs/tianshou-docs-zh-cn?label=%E4%B8%AD%E6%96%87%E6%96%87%E6%A1%A3)](https://tianshou.readthedocs.io/zh/master/) [![Unittest](https://github.com/thu-ml/tianshou/actions/workflows/pytest.yml/badge.svg)](https://github.com/thu-ml/tianshou/actions) [![codecov](https://img.shields.io/codecov/c/gh/thu-ml/tianshou)](https://codecov.io/gh/thu-ml/tianshou) [![GitHub issues](https://img.shields.io/github/issues/thu-ml/tianshou)](https://github.com/thu-ml/tianshou/issues) [![GitHub stars](https://img.shields.io/github/stars/thu-ml/tianshou)](https://github.com/thu-ml/tianshou/stargazers) [![GitHub forks](https://img.shields.io/github/forks/thu-ml/tianshou)](https://github.com/thu-ml/tianshou/network) [![GitHub license](https://img.shields.io/github/license/thu-ml/tianshou)](https://github.com/thu-ml/tianshou/blob/master/LICENSE)
 
-> ⚠️️ **Transition to Gymnasium**: The maintainers of OpenAI Gym have recently released [Gymnasium](http://github.com/Farama-Foundation/Gymnasium), 
-> which is where future maintenance of OpenAI Gym will be taking place. 
-> Tianshou has transitioned to internally using Gymnasium environments. You can still use OpenAI Gym environments with
-> Tianshou vector environments, but they will be wrapped in a compatibility layer, which could be a source of issues.
-> We recommend that you update your environment code to Gymnasium. If you want to continue using OpenAI Gym with
-> Tianshou, you need to manually install Gym and [Shimmy](https://github.com/Farama-Foundation/Shimmy) (the compatibility layer).
+> ⚠️️ **Dropped support of Gym**:
+> Tianshou no longer supports `gym`, and we recommend that you transition to 
+> [Gymnasium](http://github.com/Farama-Foundation/Gymnasium).
+> If you absolutely have to use gym, you can try using [Shimmy](https://github.com/Farama-Foundation/Shimmy) 
+> (the compatibility layer), but tianshou provides no guarantees that things will work then.
 
-**Tianshou** ([天授](https://baike.baidu.com/item/%E5%A4%A9%E6%8E%88)) is a reinforcement learning platform based on pure PyTorch. Unlike existing reinforcement learning libraries, which are mainly based on TensorFlow, have many nested classes, unfriendly API, or slow-speed, Tianshou provides a fast-speed modularized framework and pythonic API for building the deep reinforcement learning agent with the least number of lines of code. The supported interface algorithms currently include:
+> ⚠️️ **Current Status**: the tianshou master branch is currently under heavy development,
+> moving towards more features, improved interfaces, more documentation, and better compatibility with
+> other RL libraries. You can view the relevant issues in the corresponding 
+> [milestone](https://github.com/thu-ml/tianshou/milestone/1)
+> Stay tuned! (and expect breaking changes until the release is done)
+
+> ⚠️️ **Installing PyTorch**: Because of a problem with pytorch packaging and poetry in
+> current releases, the newest version of pytorch is not included in the tianshou dependencies.
+> You can still install the newest pytorch with `pip` after tianshou was installed with `poetry`.
+> [Here](https://github.com/python-poetry/poetry/issues/7902#issuecomment-1747400255) is a discussion between torch and poetry devs, who are trying to resolve it.
+
+**Tianshou** ([天授](https://baike.baidu.com/item/%E5%A4%A9%E6%8E%88)) is a reinforcement learning platform based on pure PyTorch. Unlike several existing reinforcement learning libraries, which are mainly based on TensorFlow, have many nested classes, unfriendly API, or slow-speed, Tianshou provides a fast-speed modularized framework and pythonic API for building the deep reinforcement learning agent with the least number of lines of code. The supported interface algorithms currently include:
 
 - [Deep Q-Network (DQN)](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf)
 - [Double DQN](https://arxiv.org/pdf/1509.06461.pdf)
@@ -50,7 +60,7 @@
 
 Here are Tianshou's other features:
 
-- Elegant framework, using only ~4000 lines of code
+- Elegant framework, using few lines of code in the core abstractions
 - State-of-the-art [MuJoCo benchmark](https://github.com/thu-ml/tianshou/tree/master/examples/mujoco) for REINFORCE/A2C/TRPO/PPO/DDPG/TD3/SAC algorithms
 - Support vectorized environment (synchronous or asynchronous) for all algorithms [Usage](https://tianshou.readthedocs.io/en/master/tutorials/cheatsheet.html#parallel-sampling)
 - Support super-fast vectorized environment [EnvPool](https://github.com/sail-sg/envpool/) for all algorithms [Usage](https://tianshou.readthedocs.io/en/master/tutorials/cheatsheet.html#envpool-integration)
@@ -69,7 +79,7 @@ In Chinese, Tianshou means divinely ordained and is derived to the gift of being
 
 ## Installation
 
-Tianshou is currently hosted on [PyPI](https://pypi.org/project/tianshou/) and [conda-forge](https://github.com/conda-forge/tianshou-feedstock). It requires Python >= 3.8.
+Tianshou is currently hosted on [PyPI](https://pypi.org/project/tianshou/) and [conda-forge](https://github.com/conda-forge/tianshou-feedstock). It requires Python >= 3.11.
 
 You can simply install Tianshou from PyPI with the following command:
 
@@ -160,14 +170,15 @@ The example scripts are under [test/](https://github.com/thu-ml/tianshou/blob/ma
 
 Tianshou has its tests. Different from other platforms, **the tests include the full agent training procedure for all of the implemented algorithms**. It would be failed once if it could not train an agent to perform well enough on limited epochs on toy scenarios. The tests secure the reproducibility of our platform. Check out the [GitHub Actions](https://github.com/thu-ml/tianshou/actions) page for more detail.
 
-The Atari/Mujoco benchmark results are under [examples/atari/](examples/atari/) and [examples/mujoco/](examples/mujoco/) folders. **Our Mujoco result can beat most of existing benchmark.**
+The Atari/Mujoco benchmark results are under [examples/atari/](examples/atari/) and [examples/mujoco/](examples/mujoco/) folders. **Our Mujoco result can beat most of existing benchmarks.**
 
 ### Modularized Policy
 
-We decouple all of the algorithms roughly into the following parts:
+We decouple all algorithms roughly into the following parts:
 
 - `__init__`: initialize the policy;
 - `forward`: to compute actions over given observations;
+- `process_buffer`: process initial buffer, useful for some offline learning algorithms
 - `process_fn`: to preprocess data from replay buffer (since we have reformulated all algorithms to replay-buffer based algorithms);
 - `learn`: to learn from a given batch data;
 - `post_process_fn`: to update the replay buffer from the learning process (e.g., prioritized replay buffer needs to update the weight);
@@ -226,7 +237,14 @@ optim = torch.optim.Adam(net.parameters(), lr=lr)
 Setup policy and collectors:
 
 ```python
-policy = ts.policy.DQNPolicy(net, optim, gamma, n_step, target_update_freq=target_freq)
+policy = ts.policy.DQNPolicy(
+    model=net,
+    optim=optim,
+    gamma=gamma, 
+    action_space=env.action_space, 
+    estimate_space=n_step,
+    target_update_freq=target_freq
+)
 train_collector = ts.data.Collector(policy, train_envs, ts.data.VectorReplayBuffer(buffer_size, train_num), exploration_noise=True)
 test_collector = ts.data.Collector(policy, test_envs, exploration_noise=True)  # because DQN uses epsilon-greedy method
 ```
@@ -234,13 +252,21 @@ test_collector = ts.data.Collector(policy, test_envs, exploration_noise=True)  #
 Let's train it:
 
 ```python
-result = ts.trainer.offpolicy_trainer(
-    policy, train_collector, test_collector, epoch, step_per_epoch, step_per_collect,
-    test_num, batch_size, update_per_step=1 / step_per_collect,
+result = ts.trainer.OffpolicyTrainer(
+    policy=policy,
+    train_collector=train_collector,
+    test_collector=test_collector,
+    max_epoch=epoch,
+    step_per_epoch=step_per_epoch,
+    step_per_collect=step_per_collect,
+    episode_per_test=test_num,
+    batch_size=batch_size,
+    update_per_step=update_per_step=1 / step_per_collect,
     train_fn=lambda epoch, env_step: policy.set_eps(eps_train),
     test_fn=lambda epoch, env_step: policy.set_eps(eps_test),
     stop_fn=lambda mean_rewards: mean_rewards >= env.spec.reward_threshold,
-    logger=logger)
+    logger=logger,
+).run()
 print(f'Finished training! Use {result["duration"]}')
 ```
 
@@ -300,6 +326,9 @@ If you find Tianshou useful, please cite it in your publications.
 ```
 
 ## Acknowledgment
+
+Tianshou is supported by [appliedAI Institute for Europe](https://www.appliedai-institute.de/en/),
+who is committed to providing long-term support and development.
 
 Tianshou was previously a reinforcement learning platform based on TensorFlow. You can check out the branch [`priv`](https://github.com/thu-ml/tianshou/tree/priv) for more detail. Many thanks to [Haosheng Zou](https://github.com/HaoshengZou)'s pioneering work for Tianshou before version 0.1.1.
 

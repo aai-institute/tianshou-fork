@@ -113,24 +113,15 @@ def test_cql(args=get_args()):
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
 
     # critic network
-    net_c1 = Net(
+    net_c = Net(
         args.state_shape,
         args.action_shape,
         hidden_sizes=args.hidden_sizes,
         concat=True,
         device=args.device,
     )
-    net_c2 = Net(
-        args.state_shape,
-        args.action_shape,
-        hidden_sizes=args.hidden_sizes,
-        concat=True,
-        device=args.device,
-    )
-    critic1 = Critic(net_c1, device=args.device).to(args.device)
-    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
-    critic2 = Critic(net_c2, device=args.device).to(args.device)
-    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
+    critic = Critic(net_c, device=args.device).to(args.device)
+    critic_optim = torch.optim.Adam(critic.parameters(), lr=args.critic_lr)
 
     if args.auto_alpha:
         target_entropy = -np.prod(env.action_space.shape)
@@ -141,10 +132,8 @@ def test_cql(args=get_args()):
     policy = CQLPolicy(
         actor=actor,
         actor_optim=actor_optim,
-        critic=critic1,
-        critic_optim=critic1_optim,
-        critic2=critic2,
-        critic2_optim=critic2_optim,
+        critic=critic,
+        critic_optim=critic_optim,
         # CQL seems to perform better without action scaling
         # TODO: investigate why
         action_scaling=False,
@@ -184,14 +173,6 @@ def test_cql(args=get_args()):
 
     def stop_fn(mean_rewards):
         return mean_rewards >= args.reward_threshold
-
-    def watch():
-        policy.load_state_dict(
-            torch.load(os.path.join(log_path, "policy.pth"), map_location=torch.device("cpu")),
-        )
-        policy.eval()
-        collector = Collector(policy, env)
-        collector.collect(n_episode=1, render=1 / 35)
 
     # trainer
     trainer = OfflineTrainer(
