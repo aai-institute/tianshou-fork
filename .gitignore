@@ -154,3 +154,7 @@ videos/
 .flake8
 
 docs/notebooks/_build/
+
+# temporary scripts (for ad-hoc testing), temp folder
+/temp
+/temp*.py

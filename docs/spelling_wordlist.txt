@@ -188,3 +188,11 @@ jupyter
 img
 src
 parallelized
+stdout
+parallelization
+minibatch
+minibatches
+MLP
+backpropagation
+dataclass
+superset
