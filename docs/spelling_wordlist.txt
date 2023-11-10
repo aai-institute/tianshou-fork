@@ -196,3 +196,5 @@ MLP
 backpropagation
 dataclass
 superset
+subtype
+subdirectory
