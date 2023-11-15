@@ -198,3 +198,4 @@ dataclass
 superset
 subtype
 subdirectory
+infty
