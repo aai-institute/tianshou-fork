@@ -1,29 +1,28 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal, Any, cast, Iterable, Protocol
+from typing import Any, Literal, Protocol, cast
 
 import gymnasium as gym
 import numpy as np
 import torch
 from torch.nn.utils.convert_parameters import _check_param_device
 
-from tianshou.data import SequenceSummaryStats
-from tianshou.data.batch import BatchProtocol, Batch, arr_type
-from tianshou.data.types import RolloutBatchProtocol, ObsBatchProtocol, ActBatchProtocol
+from tianshou.data import ReplayBuffer, SequenceSummaryStats
+from tianshou.data.batch import Batch, BatchProtocol, arr_type
+from tianshou.data.types import ActBatchProtocol, ObsBatchProtocol, RolloutBatchProtocol
 from tianshou.policy import BasePolicy, TrainingStats
-from tianshou.policy.base import TLearningRateScheduler, TTrainingStats
+from tianshou.policy.base import TLearningRateScheduler
 
 
 def vector_to_gradient(vec: torch.Tensor, parameters: Iterable[torch.Tensor]) -> None:
-    r"""Convert one vector to the parameters
+    r"""Convert one vector to the parameters.
 
-    Args:
-        vec (Tensor): a single vector represents the parameters of a model.
-        parameters (Iterable[Tensor]): an iterator of Tensors that are the
-            parameters of a model.
+    :param vec: a single vector represents the parameters of a model.
+    :param parameters: an iterator of Tensors that are the parameters of a model.
     """
     # Ensure vec of type Tensor
     if not isinstance(vec, torch.Tensor):
-        raise TypeError(f'expected torch.Tensor, but got: {torch.typename(vec)}')
+        raise TypeError(f"expected torch.Tensor, but got: {torch.typename(vec)}")
     # Flag for the device where the parameter is located
     param_device = None
 
@@ -36,7 +35,7 @@ def vector_to_gradient(vec: torch.Tensor, parameters: Iterable[torch.Tensor]) ->
         # The length of the parameter
         num_param = param.numel()
         # Slice the vector, reshape it, and replace the old data of the parameter
-        param.grad = vec[pointer:pointer + num_param].view_as(param).data
+        param.grad = vec[pointer : pointer + num_param].view_as(param).data
 
         # Increment the pointer
         pointer += num_param
@@ -63,15 +62,15 @@ class ARSPolicy(BasePolicy[ARSTrainingStats]):
     """
 
     def __init__(
-            self,
-            actor: torch.nn.Module,
-            optim: torch.optim.Optimizer,
-            action_space: gym.Space,
-            n_top: int | None = None,
-            observation_space: gym.Space | None = None,
-            action_scaling: bool = True,
-            action_bound_method: Literal["clip", "tanh"] | None = None,
-            lr_scheduler: TLearningRateScheduler | None = None,
+        self,
+        actor: torch.nn.Module,
+        optim: torch.optim.Optimizer,
+        action_space: gym.Space,
+        n_top: int | None = None,
+        observation_space: gym.Space | None = None,
+        action_scaling: bool = True,
+        action_bound_method: Literal["clip", "tanh"] | None = None,
+        lr_scheduler: TLearningRateScheduler | None = None,
     ) -> None:
         super().__init__(
             action_space=action_space,
@@ -85,20 +84,21 @@ class ARSPolicy(BasePolicy[ARSTrainingStats]):
         self.optim = optim
         self.n_top = n_top
 
-    def process_fn(self,
-                   batch: RolloutBatchProtocol,
-                   buffer: BatchProtocol,
-                   indices: np.ndarray) -> BatchWithReturnsAndDeltasProtocol:
+    def process_fn(
+        self,
+        batch: RolloutBatchProtocol,
+        buffer: ReplayBuffer,
+        indices: np.ndarray,
+    ) -> BatchWithReturnsAndDeltasProtocol:
         """Filter and add plus/minus returns, deltas, and return std to batch."""
-
         pop_size = len(batch.returns)
         returns = torch.Tensor(batch.returns)
-        deltas = batch.deltas[:pop_size // 2, :]
-        plus_returns = returns[:pop_size // 2, :]
-        minus_returns = returns[pop_size // 2:, :]
+        deltas = batch.deltas[: pop_size // 2, :]
+        plus_returns = returns[: pop_size // 2, :]
+        minus_returns = returns[pop_size // 2 :, :]
         if self.n_top:
             top_returns, _ = torch.max(torch.cat([plus_returns, minus_returns], dim=1), dim=1)
-            top_indices = top_returns.argsort(dim=0, descending=True)[:self.n_top]
+            top_indices = top_returns.argsort(dim=0, descending=True)[: self.n_top]
             plus_returns = plus_returns[top_indices]
             minus_returns = minus_returns[top_indices]
             deltas = deltas[top_indices]
@@ -110,15 +110,17 @@ class ARSPolicy(BasePolicy[ARSTrainingStats]):
         batch.minus_returns = minus_returns
         batch.deltas = deltas
 
-        batch = cast(BatchWithReturnsAndDeltasProtocol, batch)
+        return cast(BatchWithReturnsAndDeltasProtocol, batch)
 
-        return batch
-
-    def set_params_from_vector(self, params) -> None:
+    def set_params_from_vector(self, params: torch.Tensor) -> None:
         torch.nn.utils.vector_to_parameters(params.flatten(), self.parameters())
 
-    def forward(self, batch: ObsBatchProtocol, state: dict | BatchProtocol | np.ndarray | None = None,
-                **kwargs: Any) -> ActBatchProtocol:
+    def forward(
+        self,
+        batch: ObsBatchProtocol,
+        state: dict | BatchProtocol | np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> ActBatchProtocol:
         """Compute action over the given batch data."""
         act = self.actor(batch.obs)
         result = Batch(act=act)
@@ -133,4 +135,3 @@ class ARSPolicy(BasePolicy[ARSTrainingStats]):
         self.optim.step()
 
         return ARSTrainingStats(loss=SequenceSummaryStats.from_sequence(batch.plus_returns.numpy()))
-

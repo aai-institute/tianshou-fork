@@ -1,14 +1,14 @@
 import argparse
+import datetime
 import os
 import pprint
-import datetime
 
 import gymnasium as gym
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.data import Collector, VectorReplayBuffer, ReplayBuffer
+from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv, VectorEnvNormObs
 from tianshou.policy import ARSPolicy
 from tianshou.trainer import PopulationBasedTrainer
@@ -53,12 +53,20 @@ def test_ars(args=get_args()):
     # We use VectorEnvNormObs to realize observation normalization for ARS V2 (see line 8) and set healthy_reward=0
     # to exclude the survival bonus of the task (if it exists).
     try:
-        train_envs = VectorEnvNormObs(DummyVectorEnv([lambda: gym.make(args.task, healthy_reward=0) for _ in range(args.training_num)]))
+        train_envs = VectorEnvNormObs(
+            DummyVectorEnv(
+                [lambda: gym.make(args.task, healthy_reward=0) for _ in range(args.training_num)],
+            ),
+        )
     except TypeError:
         train_envs = VectorEnvNormObs(
-            DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.training_num)]))
+            DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.training_num)]),
+        )
 
-    test_envs = VectorEnvNormObs(DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.test_num)]), update_obs_rms=False)
+    test_envs = VectorEnvNormObs(
+        DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.test_num)]),
+        update_obs_rms=False,
+    )
     test_envs.set_obs_rms(train_envs.get_obs_rms())
 
     # seed
@@ -68,11 +76,12 @@ def test_ars(args=get_args()):
     test_envs.seed(args.seed)
 
     # model
-    actor = Linear(args.state_shape[0],
-                   output_dim=args.action_shape[0],
-                   bias=False,
-                   activation=None,
-                   device=args.device)
+    actor = Linear(
+        args.state_shape[0],
+        output_dim=args.action_shape[0],
+        bias=False,
+        device=args.device,
+    )
 
     # zero initialization
     for p in list(actor.parameters()):
@@ -84,14 +93,15 @@ def test_ars(args=get_args()):
     if args.n_top:
         assert args.n_top < args.n_delta, "n_top should be less than n_delta"
 
-    policy = ARSPolicy(actor=actor,
-                       optim=optim,
-                       n_top=args.n_top,
-                       action_space=env.action_space,
-                       observation_space=env.observation_space,
-                       action_scaling=args.max_action,
-                       action_bound_method="clip",
-                       )
+    policy = ARSPolicy(
+        actor=actor,
+        optim=optim,
+        n_top=args.n_top,
+        action_space=env.action_space,
+        observation_space=env.observation_space,
+        action_scaling=args.max_action,
+        action_bound_method="clip",
+    )
 
     # collector
     train_collector = Collector(
@@ -142,7 +152,7 @@ def test_ars(args=get_args()):
 
     trainer = PopulationBasedTrainer(
         policy,
-        buffer=ReplayBuffer(20, len(train_envs)),
+        buffer=ReplayBuffer(2 * args.n_delta, len(train_envs)),
         n_delta=args.n_delta,
         sigma=args.sigma,
         max_epoch=args.epoch,
@@ -169,7 +179,10 @@ def test_ars(args=get_args()):
     if __name__ == "__main__":
         pprint.pprint(epoch_stat)
         # Let's watch its performance!
-        env = VectorEnvNormObs(DummyVectorEnv([lambda: gym.make(args.task, render_mode="human") for _ in range(1)]), update_obs_rms=False)
+        env = VectorEnvNormObs(
+            DummyVectorEnv([lambda: gym.make(args.task, render_mode="human") for _ in range(1)]),
+            update_obs_rms=False,
+        )
         env.set_obs_rms(train_envs.get_obs_rms())
         policy.eval()
         collector = Collector(policy, env)

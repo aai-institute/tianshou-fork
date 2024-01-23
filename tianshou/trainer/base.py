@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import asdict
-from typing import cast, Protocol
 
 import numpy as np
 import torch
@@ -18,11 +17,9 @@ from tianshou.data import (
     EpochStats,
     InfoStats,
     ReplayBuffer,
-    SequenceSummaryStats, Batch,
+    SequenceSummaryStats,
 )
-from tianshou.data.batch import arr_type
 from tianshou.data.collector import CollectStatsBase
-from tianshou.data.types import BatchWithReturnsProtocol, RolloutBatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import TrainingStats
 from tianshou.trainer.utils import gather_info, test_episode
@@ -31,8 +28,9 @@ from tianshou.utils import (
     DummyTqdm,
     LazyLogger,
     MovAvg,
+    RunningMeanStd,
     deprecation,
-    tqdm_config, RunningMeanStd,
+    tqdm_config,
 )
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
@@ -317,6 +315,7 @@ class BaseTrainer(ABC):
                 train_stat: CollectStatsBase
                 if self.train_collector is not None:
                     train_stat, self.stop_fn_flag = self.train_step()
+                    pbar_data_dict: dict[str, str | float]
                     pbar_data_dict = {
                         "env_step": str(self.env_step),
                         "rew": f"{self.last_rew:.2f}",
@@ -337,10 +336,10 @@ class BaseTrainer(ABC):
                     t.update()
 
                 update_stat = self.policy_update_fn(train_stat)
-                pbar_data_dict = set_numerical_fields_to_precision(pbar_data_dict)
                 pbar_data_dict["gradient_step"] = str(self._gradient_step)
                 for key in self.stat.keys():
                     pbar_data_dict[key] = self.stat[key].get()
+                pbar_data_dict = set_numerical_fields_to_precision(pbar_data_dict)
                 t.set_postfix(**pbar_data_dict)
 
             if t.n <= t.total and not self.stop_fn_flag:
@@ -675,30 +674,32 @@ class PopulationBasedTrainer(BaseTrainer):
     :param sigma: standard deviation of the exploration noise
     """
 
+    buffer: ReplayBuffer
+
     def __init__(
-            self,
-            policy: BasePolicy,
-            n_delta: int,
-            sigma: float,
-            max_epoch: int,
-            train_collector: Collector | None = None,
-            test_collector: Collector | None = None,
-            buffer: ReplayBuffer | None = None,
-            step_per_epoch: int | None = None,
-            episode_per_test: int | None = None,
-            episode_per_collect: int | None = None,
-            train_fn: Callable[[int, int], None] | None = None,
-            test_fn: Callable[[int, int | None], None] | None = None,
-            stop_fn: Callable[[float], bool] | None = None,
-            save_best_fn: Callable[[BasePolicy], None] | None = None,
-            save_checkpoint_fn: Callable[[int, int, int], str] | None = None,
-            resume_from_log: bool = False,
-            reward_metric: Callable[[np.ndarray], np.ndarray] | None = None,
-            logger: BaseLogger = LazyLogger(),
-            verbose: bool = True,
-            show_progress: bool = True,
-            test_in_train: bool = True,
-            save_fn: Callable[[BasePolicy], None] | None = None,
+        self,
+        policy: BasePolicy,
+        n_delta: int,
+        sigma: float,
+        max_epoch: int,
+        train_collector: Collector,
+        buffer: ReplayBuffer,
+        test_collector: Collector | None = None,
+        step_per_epoch: int | None = None,
+        episode_per_test: int | None = None,
+        episode_per_collect: int | None = None,
+        train_fn: Callable[[int, int], None] | None = None,
+        test_fn: Callable[[int, int | None], None] | None = None,
+        stop_fn: Callable[[float], bool] | None = None,
+        save_best_fn: Callable[[BasePolicy], None] | None = None,
+        save_checkpoint_fn: Callable[[int, int, int], str] | None = None,
+        resume_from_log: bool = False,
+        reward_metric: Callable[[np.ndarray], np.ndarray] | None = None,
+        logger: BaseLogger = LazyLogger(),
+        verbose: bool = True,
+        show_progress: bool = True,
+        test_in_train: bool = True,
+        save_fn: Callable[[BasePolicy], None] | None = None,
     ):
         super().__init__(
             policy=policy,
@@ -710,7 +711,7 @@ class PopulationBasedTrainer(BaseTrainer):
             step_per_epoch=step_per_epoch,
             repeat_per_collect=None,
             episode_per_test=episode_per_test,
-            update_per_step=None,
+            update_per_step=1,
             step_per_collect=None,
             episode_per_collect=episode_per_collect,
             train_fn=train_fn,
@@ -746,7 +747,11 @@ class PopulationBasedTrainer(BaseTrainer):
 
         train_policy = copy.deepcopy(self.policy)
 
-        deltas = torch.normal(mean=0.0, std=1.0, size=(self.n_delta, self.n_params))  # Do we need, device=self.device)?
+        deltas = torch.normal(
+            mean=0.0,
+            std=1.0,
+            size=(self.n_delta, self.n_params),
+        )  # Do we need, device=self.device)?
         weights = torch.nn.utils.parameters_to_vector(self.policy.parameters()).detach()
 
         population_plus = weights + self.sigma * deltas
@@ -764,6 +769,8 @@ class PopulationBasedTrainer(BaseTrainer):
 
             self.env_step += result.n_collected_steps
 
+        assert result.returns_stat is not None  # for mypy
+        assert result.lens_stat is not None  # for mypy
         self.last_rew = result.returns_stat.mean
         self.last_len = result.lens_stat.mean
         if self.reward_metric:
@@ -777,9 +784,10 @@ class PopulationBasedTrainer(BaseTrainer):
             result.n_collected_episodes > 0
             and self.test_in_train
             and self.stop_fn
-            and self.stop_fn(result.returns_stat.mean)  # type: ignore
+            and self.stop_fn(result.returns_stat.mean)
         ):
             assert self.test_collector is not None
+            assert self.episode_per_test is not None
             test_result = test_episode(
                 self.policy,
                 self.test_collector,
@@ -803,6 +811,8 @@ class PopulationBasedTrainer(BaseTrainer):
         self,
         collect_stats: CollectStatsBase,
     ) -> TrainingStats:
+        assert self.train_collector is not None
+
         training_stat = self.policy.update(
             sample_size=0,
             buffer=self.buffer,  # here's the difference to the OnPolicyTrainer

@@ -61,14 +61,11 @@ class Linear(nn.Module):
         input_dim: int,
         output_dim: int,
         device: str | int | torch.device | None = None,
-        activation: ModuleType | None = None,
         bias: bool = True,
     ) -> None:
         super().__init__()
         self.device = device
         modules = [nn.Linear(input_dim, output_dim, bias)]
-        if activation is not None:
-            modules.append(activation())
         self.model = nn.Sequential(*modules)
 
     @no_type_check
