@@ -3,6 +3,7 @@
 
 from tianshou.policy.base import BasePolicy, TrainingStats
 from tianshou.policy.random import RandomPolicy
+from tianshou.policy.modelfree.ars import ARSPolicy
 from tianshou.policy.modelfree.dqn import DQNPolicy
 from tianshou.policy.modelfree.bdq import BranchingDQNPolicy
 from tianshou.policy.modelfree.c51 import C51Policy
@@ -33,6 +34,7 @@ from tianshou.policy.modelbased.icm import ICMPolicy
 from tianshou.policy.multiagent.mapolicy import MultiAgentPolicyManager
 
 __all__ = [
+    "ARSPolicy",
     "BasePolicy",
     "RandomPolicy",
     "DQNPolicy",

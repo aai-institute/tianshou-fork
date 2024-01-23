@@ -1,11 +1,14 @@
+import copy
 import logging
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import asdict
+from typing import cast, Protocol
 
 import numpy as np
+import torch
 import tqdm
 
 from tianshou.data import (
@@ -15,9 +18,11 @@ from tianshou.data import (
     EpochStats,
     InfoStats,
     ReplayBuffer,
-    SequenceSummaryStats,
+    SequenceSummaryStats, Batch,
 )
+from tianshou.data.batch import arr_type
 from tianshou.data.collector import CollectStatsBase
+from tianshou.data.types import BatchWithReturnsProtocol, RolloutBatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import TrainingStats
 from tianshou.trainer.utils import gather_info, test_episode
@@ -27,7 +32,7 @@ from tianshou.utils import (
     LazyLogger,
     MovAvg,
     deprecation,
-    tqdm_config,
+    tqdm_config, RunningMeanStd,
 )
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
@@ -334,7 +339,8 @@ class BaseTrainer(ABC):
                 update_stat = self.policy_update_fn(train_stat)
                 pbar_data_dict = set_numerical_fields_to_precision(pbar_data_dict)
                 pbar_data_dict["gradient_step"] = str(self._gradient_step)
-
+                for key in self.stat.keys():
+                    pbar_data_dict[key] = self.stat[key].get()
                 t.set_postfix(**pbar_data_dict)
 
             if t.n <= t.total and not self.stop_fn_flag:
@@ -655,6 +661,161 @@ class OnpolicyTrainer(BaseTrainer):
         self.train_collector.reset_buffer(keep_statistics=True)
 
         # The step is the number of mini-batches used for the update, so essentially
+        self._update_moving_avg_stats_and_log_update_data(training_stat)
+
+        return training_stat
+
+
+class PopulationBasedTrainer(BaseTrainer):
+    """Trainer for population-based training.
+
+    This trainer is used for the Augmented Random Search algorithm
+
+    :param n_delta: number of directions to sample per training iteration
+    :param sigma: standard deviation of the exploration noise
+    """
+
+    def __init__(
+            self,
+            policy: BasePolicy,
+            n_delta: int,
+            sigma: float,
+            max_epoch: int,
+            train_collector: Collector | None = None,
+            test_collector: Collector | None = None,
+            buffer: ReplayBuffer | None = None,
+            step_per_epoch: int | None = None,
+            episode_per_test: int | None = None,
+            episode_per_collect: int | None = None,
+            train_fn: Callable[[int, int], None] | None = None,
+            test_fn: Callable[[int, int | None], None] | None = None,
+            stop_fn: Callable[[float], bool] | None = None,
+            save_best_fn: Callable[[BasePolicy], None] | None = None,
+            save_checkpoint_fn: Callable[[int, int, int], str] | None = None,
+            resume_from_log: bool = False,
+            reward_metric: Callable[[np.ndarray], np.ndarray] | None = None,
+            logger: BaseLogger = LazyLogger(),
+            verbose: bool = True,
+            show_progress: bool = True,
+            test_in_train: bool = True,
+            save_fn: Callable[[BasePolicy], None] | None = None,
+    ):
+        super().__init__(
+            policy=policy,
+            max_epoch=max_epoch,
+            batch_size=None,
+            train_collector=train_collector,
+            test_collector=test_collector,
+            buffer=buffer,
+            step_per_epoch=step_per_epoch,
+            repeat_per_collect=None,
+            episode_per_test=episode_per_test,
+            update_per_step=None,
+            step_per_collect=None,
+            episode_per_collect=episode_per_collect,
+            train_fn=train_fn,
+            test_fn=test_fn,
+            stop_fn=stop_fn,
+            save_best_fn=save_best_fn,
+            save_checkpoint_fn=save_checkpoint_fn,
+            resume_from_log=resume_from_log,
+            reward_metric=reward_metric,
+            logger=logger,
+            verbose=verbose,
+            show_progress=show_progress,
+            test_in_train=test_in_train,
+            save_fn=save_fn,
+        )
+
+        self.weights = torch.nn.utils.parameters_to_vector(self.policy.parameters()).detach()
+        self.n_params = len(self.weights)
+        self.n_delta = n_delta
+        self.pop_size = 2 * self.n_delta
+        self.sigma = sigma
+
+        self.obs_rms = RunningMeanStd()
+
+    def train_step(self) -> tuple[CollectStats, bool]:
+        """Perform one sampling step for training.
+
+        - sample random deltas
+        - perform rollout with each weight +/- sigma * delta
+        """
+        assert self.train_collector is not None
+        should_stop_training = False
+
+        train_policy = copy.deepcopy(self.policy)
+
+        deltas = torch.normal(mean=0.0, std=1.0, size=(self.n_delta, self.n_params))  # Do we need, device=self.device)?
+        weights = torch.nn.utils.parameters_to_vector(self.policy.parameters()).detach()
+
+        population_plus = weights + self.sigma * deltas
+        population_minus = weights - self.sigma * deltas
+        population = torch.cat([population_plus, population_minus])
+
+        for i, w in enumerate(population):
+            train_policy.set_params_from_vector(w)
+            self.train_collector.policy = train_policy
+            result = self.train_collector.collect(n_episode=self.episode_per_collect)
+            data = self.train_collector.buffer[self.train_collector.buffer.last_index]
+            data.returns = result.returns
+            data.deltas = deltas[i % self.n_delta]
+            self.buffer.add(data)
+
+            self.env_step += result.n_collected_steps
+
+        self.last_rew = result.returns_stat.mean
+        self.last_len = result.lens_stat.mean
+        if self.reward_metric:
+            rew = self.reward_metric(result.returns)
+            result.returns = rew
+            result.returns_stat = SequenceSummaryStats.from_sequence(rew)
+
+        self.logger.log_train_data(asdict(result), self.env_step)
+
+        if (
+            result.n_collected_episodes > 0
+            and self.test_in_train
+            and self.stop_fn
+            and self.stop_fn(result.returns_stat.mean)  # type: ignore
+        ):
+            assert self.test_collector is not None
+            test_result = test_episode(
+                self.policy,
+                self.test_collector,
+                self.test_fn,
+                self.epoch,
+                self.episode_per_test,
+                self.logger,
+                self.env_step,
+            )
+            assert test_result.returns_stat is not None  # for mypy
+            if self.stop_fn(test_result.returns_stat.mean):
+                should_stop_training = True
+                self.best_reward = test_result.returns_stat.mean
+                self.best_reward_std = test_result.returns_stat.std
+            else:
+                self.policy.train()
+
+        return result, should_stop_training
+
+    def policy_update_fn(
+        self,
+        collect_stats: CollectStatsBase,
+    ) -> TrainingStats:
+        training_stat = self.policy.update(
+            sample_size=0,
+            buffer=self.buffer,  # here's the difference to the OnPolicyTrainer
+            batch_size=None,
+            repeat=1,
+        )
+
+        # just for logging, no functional role
+        self.policy_update_time += training_stat.train_time
+        self._gradient_step += 1
+
+        self.train_collector.reset_buffer(keep_statistics=True)
+
         self._update_moving_avg_stats_and_log_update_data(training_stat)
 
         return training_stat

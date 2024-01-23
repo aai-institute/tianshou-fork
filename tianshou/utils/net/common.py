@@ -43,6 +43,39 @@ def miniblock(
     return layers
 
 
+class Linear(nn.Module):
+    """Simple Linear backbone.
+
+    Create a Linear layer of size input_dim * output_dim
+
+    :param input_dim: dimension of the input vector.
+    :param output_dim: dimension of the output vector.
+    :param device: which device to create this model on. Default to None.
+    :param activation: which activation to use after the linear layer, can be
+    :param bias: whether to include an additive bias, default to be True.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        device: str | int | torch.device | None = None,
+        activation: ModuleType | None = None,
+        bias: bool = True,
+    ) -> None:
+        super().__init__()
+        self.device = device
+        modules = [nn.Linear(input_dim, output_dim, bias)]
+        if activation is not None:
+            modules.append(activation())
+        self.model = nn.Sequential(*modules)
+
+    @no_type_check
+    def forward(self, obs: np.ndarray | torch.Tensor) -> torch.Tensor:
+        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
+        return self.model(obs)
+
+
 class MLP(nn.Module):
     """Simple MLP backbone.
 

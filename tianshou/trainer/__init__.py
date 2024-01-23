@@ -5,6 +5,7 @@ from tianshou.trainer.base import (
     OfflineTrainer,
     OffpolicyTrainer,
     OnpolicyTrainer,
+    PopulationBasedTrainer,
 )
 from tianshou.trainer.utils import gather_info, test_episode
 
@@ -13,6 +14,7 @@ __all__ = [
     "OffpolicyTrainer",
     "OnpolicyTrainer",
     "OfflineTrainer",
+    "PopulationBasedTrainer",
     "test_episode",
     "gather_info",
 ]
