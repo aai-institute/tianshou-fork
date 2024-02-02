@@ -38,7 +38,9 @@ def test_episode(
         result.returns_stat = SequenceSummaryStats.from_sequence(rew)
     if logger and global_step is not None:
         assert result.n_collected_episodes > 0
-        logger.log_test_data(asdict(result), global_step)
+        result_dict = asdict(result)
+        result_dict.update({"env_num": collector.env_num})
+        logger.log_test_data(result_dict, global_step)
     return result
 
 

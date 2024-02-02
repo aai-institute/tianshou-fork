@@ -118,7 +118,7 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method (stupid because log_test_data is only called from function in utils.py, not from BaseTrainer)
         if step - self.last_log_test_step >= self.test_interval:
-            log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.TEST.value)
+            log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.TEST.value, exclude_arrays=False)
             self.write(DataScope.TEST.value + "/env_step", step, log_data)
             self.last_log_test_step = step
 

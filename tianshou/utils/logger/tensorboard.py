@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import Any
-
+import matplotlib.pyplot as plt
+import numpy as np
 from tensorboard.backend.event_processing import event_accumulator
 from torch.utils.tensorboard import SummaryWriter
 
@@ -40,7 +41,52 @@ class TensorboardLogger(BaseLogger):
 
     def write(self, step_type: str, step: int, data: dict[str, VALID_LOG_VALS_TYPE]) -> None:
         for k, v in data.items():
-            self.writer.add_scalar(k, v, global_step=step)
+            if isinstance(v, np.ndarray):
+                self.writer.add_histogram(k,v,global_step=step, bins="auto")
+                try:
+                    env_num = data.get("test/env_num", 1)
+                except:
+                    env_num = 1
+                    print(data, type(data))
+                exp_per_env = len(v) // env_num
+                # Create a list of subsets
+                subsets = [v[i::env_num] for i in range(env_num)]
+
+                # Combine all entries and subsets for plotting
+                data = [v] + subsets + [v[:exp_per_env]]
+                print(data)
+                # Create x-tick labels
+                xtick_labels = ['All Entries'] + [f'Subset {i + 1}' for i in
+                                                  range(env_num)] + [f'first {exp_per_env}']
+
+                # Check if the dimensions are compatible
+                if len(data) != len(xtick_labels):
+                    print(f"{len(data), {len(xtick_labels)} }")
+                    raise ValueError(
+                        "Dimensions of data and xtick_labels are not compatible.")
+
+                # Create a box plot for all entries and subsets
+                plt.boxplot(data, labels=xtick_labels)
+                plt.xticks(rotation=45)
+                plt.xlabel('Data Subset')
+                plt.ylabel('Values')
+                plt.title(
+                    f'Box Plots of Eval Returns {env_num} tenv a {exp_per_env} exp/tenv')
+                # Adding plot to tensorboard
+                self.writer.add_figure(k+f" img", plt.gcf(), global_step=step)
+
+                plt.errorbar(range(len(data)), [np.mean(d) for d in data], [np.std(d) for d in data], fmt='o')
+                plt.xticks(range(len(data)), xtick_labels, rotation=45)
+                plt.xlabel('Data Subset')
+                plt.ylabel('Return Meand and Std')
+                plt.title(
+                    f'Mean and Std of Eval Returns {env_num} tenv a {exp_per_env}  exp/tenv')
+                # Adding plot to tensorboard
+                self.writer.add_figure(k+f" errorbar", plt.gcf(), global_step=step)
+                #try the numpy image plot as way to port data
+
+            else:
+                self.writer.add_scalar(k, v, global_step=step)
         if self.write_flush:  # issue 580
             self.writer.flush()  # issue #482
 
