@@ -329,7 +329,9 @@ class EnvFactory(ToStringMixin, ABC):
         """
         return self.venv_type.create_venv([lambda: self.create_env(mode)] * num_envs)
 
-    def create_envs(self, num_training_envs: int, num_test_envs: int) -> Environments:
+    def create_envs(self, num_training_envs: int, num_test_envs: int,
+                    base_train_env_seed: int|None = None,
+                    base_test_env_seed: int|None = None) -> Environments:
         """Create environments for learning.
 
         :param num_training_envs: the number of training environments
@@ -337,8 +339,8 @@ class EnvFactory(ToStringMixin, ABC):
         :return: the environments
         """
         env = self.create_env(EnvMode.TRAIN)
-        train_envs = self.create_venv(num_training_envs, EnvMode.TRAIN)
-        test_envs = self.create_venv(num_test_envs, EnvMode.TEST)
+        train_envs = self.create_venv(num_training_envs, EnvMode.TRAIN, base_train_env_seed)
+        test_envs = self.create_venv(num_test_envs, EnvMode.TEST, base_test_env_seed)
         match EnvType.from_env(env):
             case EnvType.DISCRETE:
                 return DiscreteEnvironments(env, train_envs, test_envs)
@@ -406,7 +408,8 @@ class EnvFactoryRegistered(EnvFactory):
         kwargs = self._create_kwargs(mode)
         return gymnasium.make(self.task, **kwargs)
 
-    def create_venv(self, num_envs: int, mode: EnvMode) -> BaseVectorEnv:
+    def create_venv(self, num_envs: int, mode: EnvMode,
+                    base_env_seed: int|None = None) -> BaseVectorEnv:
         if self.envpool_factory is not None:
             return self.envpool_factory.create_venv(
                 self.task,
@@ -417,5 +420,8 @@ class EnvFactoryRegistered(EnvFactory):
             )
         else:
             venv = super().create_venv(num_envs, mode)
-            venv.seed(self.seed)
+            if base_env_seed is not None:
+                venv.seed([base_env_seed + i for i in range(num_envs)])
+            else:
+                venv.seed(self.seed)
             return venv

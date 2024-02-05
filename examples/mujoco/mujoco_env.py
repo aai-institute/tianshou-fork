@@ -21,7 +21,11 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
-def make_mujoco_env(task: str, seed: int, num_train_envs: int, num_test_envs: int, obs_norm: bool):
+def make_mujoco_env(task: str, seed: int, num_train_envs: int, num_test_envs: int,
+                    obs_norm: bool,
+                    base_train_env_seed: int | None = None,
+                    base_test_env_seed: int | None = None,
+                    ):
     """Wrapper function for Mujoco env.
 
     If EnvPool is installed, it will automatically switch to EnvPool's Mujoco env.
@@ -31,6 +35,8 @@ def make_mujoco_env(task: str, seed: int, num_train_envs: int, num_test_envs: in
     envs = MujocoEnvFactory(task, seed, obs_norm=obs_norm).create_envs(
         num_train_envs,
         num_test_envs,
+        base_train_env_seed,
+        base_test_env_seed,
     )
     return envs.env, envs.train_envs, envs.test_envs
 
@@ -68,8 +74,11 @@ class MujocoEnvFactory(EnvFactoryRegistered):
         )
         self.obs_norm = obs_norm
 
-    def create_envs(self, num_training_envs: int, num_test_envs: int) -> ContinuousEnvironments:
-        envs = super().create_envs(num_training_envs, num_test_envs)
+    def create_envs(self, num_training_envs: int, num_test_envs: int,
+                    base_train_env_seed: int|None = None,
+                    base_test_env_seed: int|None = None) -> ContinuousEnvironments:
+        envs = super().create_envs(num_training_envs, num_test_envs,
+                                   base_train_env_seed, base_test_env_seed)
         assert isinstance(envs, ContinuousEnvironments)
 
         # obs norm wrapper
