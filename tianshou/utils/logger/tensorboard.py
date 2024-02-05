@@ -51,7 +51,8 @@ class TensorboardLogger(BaseLogger):
                 exp_per_env = len(v) // env_num
                 # Create a list of subsets
                 subsets = [v[i::env_num] for i in range(env_num)]
-
+                # Log the data
+                self.writer.add_embedding(np.array(subsets), metadata=[f'worker {i}' for i in range(env_num)], global_step=step, tag=k+' raw')
                 # Combine all entries and subsets for plotting
                 data = [v] + subsets + [v[:exp_per_env]]
                 print(data)
