@@ -18,7 +18,7 @@ from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 
 
-def get_args():
+def get_sac_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="Ant-v4")
     parser.add_argument("--seed", type=int, default=0, help="random seed for everything except envs")
@@ -64,10 +64,11 @@ def get_args():
         action="store_true",
         help="watch the play of pre-trained policy only",
     )
+    parser.add_argument("--runs-per-test-env", type=int, default=3)
     return parser.parse_args()
 
 
-def run_sac(args=get_args()):
+def run_sac(args=get_sac_args()):
     env, train_envs, test_envs = make_mujoco_env(
         args.task,
         args.seed,
@@ -183,7 +184,7 @@ def run_sac(args=get_args()):
             max_epoch=args.epoch,
             step_per_epoch=args.step_per_epoch,
             step_per_collect=args.step_per_collect,
-            episode_per_test=args.test_num*3,#todo robert make this an addional argument
+            episode_per_test=args.test_num*args.runs_per_test_env,
             batch_size=args.batch_size,
             save_best_fn=save_best_fn,
             logger=logger,
