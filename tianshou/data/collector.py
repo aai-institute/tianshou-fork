@@ -1,5 +1,6 @@
 import time
 import warnings
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
@@ -7,6 +8,7 @@ from typing import Any, cast
 import gymnasium as gym
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
 from tianshou.data import (
     Batch,
@@ -50,6 +52,48 @@ class CollectStats(CollectStatsBase):
     """The collected episode lengths."""
     lens_stat: SequenceSummaryStats | None  # can be None if no episode ends during collect step
     """Stats of the collected episode lengths."""
+    episode_return_boxplot: plt.Figure | None
+    """The boxplot of the collected episode returns."""
+    episode_return_error_bar: plt.Figure | None
+    """The error bar plot of the collected episode returns."""
+
+
+def create_episode_return_plots(returns: np.array, ep_ret_per_env: defaultdict):
+
+    env_ids = list(ep_ret_per_env.keys())
+    env_num = len(env_ids)
+    exp_per_env = [len(ep_ret_per_env[i]) for i in env_ids]
+
+    # Combine all entries and subsets for plotting
+    data = [returns] + [sub_ret for sub_ret in ep_ret_per_env.values()]
+    # print(data)
+    # Create x-tick labels
+    xtick_labels = ['All Entries'] + [f'Subset {i + 1}' for i in env_ids]
+
+    # Check if the dimensions are compatible
+    if len(data) != len(xtick_labels):
+        print(f"{len(data), {len(xtick_labels)} }")
+        raise ValueError(
+            "Dimensions of data and xtick_labels are not compatible.")
+
+    # Create a box plot for all entries and subsets
+    fig, ax = plt.subplots()
+    ax.boxplot(data, labels=xtick_labels)
+    ax.tick_params(axis='x', labelrotation=45)
+    ax.set_xlabel('Data Subset')
+    ax.set_ylabel('Values')
+    ax.set_title(
+        f'Box Plots of Eval Returns {env_num} tenv a {exp_per_env} exp/tenv')
+
+    fig2, ax2 = plt.subplots()
+    ax2.errorbar(range(len(data)), [np.mean(d) for d in data], [np.std(d) for d in data], fmt='o')
+    ax2.set_xticks(range(len(data)), xtick_labels, rotation=45)
+    ax2.set_xlabel('Data Subset')
+    ax2.set_ylabel('Return Mean and Std')
+    ax2.set_title(
+        f'Mean and Std of Eval Returns {env_num} tenv a {exp_per_env}  exp/tenv')
+
+    return fig, fig2
 
 
 class Collector:
@@ -276,6 +320,8 @@ class Collector:
         episode_lens: list[int] = []
         episode_start_indices: list[int] = []
 
+        episode_returns_per_env = defaultdict(list)
+
         while True:
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
@@ -359,8 +405,9 @@ class Collector:
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
                 self._reset_env_with_ids(env_ind_local, env_ind_global, gym_reset_kwargs)
-                for i in env_ind_local:
-                    self._reset_state(i)
+                for i_l, i_g in zip(env_ind_local, env_ind_global):
+                    self._reset_state(i_l)
+                    episode_returns_per_env[i_g].append(ep_rew[i_l])
 
                 # remove surplus env id from ready_env_ids
                 # to avoid bias in selecting environments
@@ -398,6 +445,8 @@ class Collector:
             self.data = cast(RolloutBatchProtocol, data)
             self.reset_env()
 
+        fig, fig2 = create_episode_return_plots(episode_returns, episode_returns_per_env)
+
         return CollectStats(
             n_collected_episodes=episode_count,
             n_collected_steps=step_count,
@@ -411,6 +460,8 @@ class Collector:
             lens_stat=SequenceSummaryStats.from_sequence(episode_lens)
             if len(episode_lens) > 0
             else None,
+            episode_return_boxplot=fig,
+            episode_return_error_bar=fig2,
         )
 
 

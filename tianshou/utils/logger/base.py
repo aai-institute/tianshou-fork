@@ -6,8 +6,10 @@ from numbers import Number
 from typing import Any
 
 import numpy as np
+from matplotlib.figure import Figure
 
-VALID_LOG_VALS_TYPE = int | Number | np.number | np.ndarray | float
+
+VALID_LOG_VALS_TYPE = int | Number | np.number | np.ndarray | float | Figure
 VALID_LOG_VALS = typing.get_args(
     VALID_LOG_VALS_TYPE,
 )  # I know it's stupid, but we can't use Union type in isinstance
