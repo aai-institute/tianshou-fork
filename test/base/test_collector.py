@@ -795,7 +795,7 @@ def test_collector_envpool_gym_reset_return_info():
 def test_collector_with_vector_env():
     writer = SummaryWriter("log/collector")
     logger = Logger(writer)
-    env_fns = [lambda x=i: MyTestEnv(size=x, sleep=0) for i in [1, 100, 100, 100]]
+    env_fns = [lambda x=i: MyTestEnv(size=x, sleep=0) for i in [1, 80, 90, 100]]
 
     dum = DummyVectorEnv(env_fns)
     venv = SubprocVectorEnv(env_fns)
@@ -820,6 +820,16 @@ def test_collector_with_vector_env():
 
     c2r = c2.collect(n_episode=10, gym_reset_kwargs=None)
     print(c2r.lens)
+
+    c3 = Collector(
+        policy,
+        dum,
+        VectorReplayBuffer(total_size=100, buffer_num=4),
+        logger.preprocess_fn,
+    )
+    c3r = c3.collect(n_episode=12,sample_equal_from_each_env=True, gym_reset_kwargs=None)
+    print(c3r.lens)
+
 
 
 if __name__ == "__main__":

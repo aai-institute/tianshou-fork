@@ -1,3 +1,4 @@
+import collections
 import time
 import warnings
 from collections.abc import Callable
@@ -185,6 +186,29 @@ class Collector:
         self.data.info = info  # type: ignore
         self.data.obs = obs
 
+    def _reset_env_to_next(self, gym_reset_kwargs: dict[str, Any] = None) -> None:
+        gym_reset_kwargs = gym_reset_kwargs if gym_reset_kwargs else {}
+        obs, info = self.env.reset(**gym_reset_kwargs)
+        if self.preprocess_fn:
+            processed_data = self.preprocess_fn(
+                obs=obs, info=info, env_id=np.arange(self.env_num)
+            )
+            obs = processed_data.get("obs", obs)
+            info = processed_data.get("info", info)
+        self.data = Batch(
+            obs={},
+            act={},
+            rew={},
+            terminated={},
+            truncated={},
+            done={},
+            obs_next={},
+            info={},
+            policy={}
+        )
+        self.data.info = info
+        self.data.obs_next = obs
+
     def _reset_state(self, id: int | list[int]) -> None:
         """Reset the hidden state: self.data.state[id]."""
         if hasattr(self.data.policy, "hidden_state"):
@@ -220,6 +244,8 @@ class Collector:
         render: float | None = None,
         no_grad: bool = True,
         gym_reset_kwargs: dict[str, Any] | None = None,
+        sample_equal_from_each_env: bool = False,
+
     ) -> CollectStats:
         """Collect a specified number of step or episode.
 
@@ -237,6 +263,9 @@ class Collector:
             True (no gradient retaining).
         :param gym_reset_kwargs: extra keyword arguments to pass into the environment's
             reset function. Defaults to None (extra keyword arguments)
+        :param sample_equal_from_each_env: whether to sample equal number of episodes
+            from each env. Otherwise it is only ensured that at least one episode
+             is collected from every env when using n_episode. Default to False.
 
         .. note::
 
@@ -260,6 +289,8 @@ class Collector:
             ready_env_ids = np.arange(self.env_num)
         elif n_episode is not None:
             assert n_episode > 0
+            if sample_equal_from_each_env:
+                assert n_episode % self.env_num == 0, "n_episode must be a multiple of #env when sample_equal_from_each_env is True."
             ready_env_ids = np.arange(min(self.env_num, n_episode))
             self.data = self.data[: min(self.env_num, n_episode)]
         else:
@@ -273,6 +304,7 @@ class Collector:
         step_count = 0
         episode_count = 0
         episode_returns: list[float] = []
+        episode_returns_per_env: dict[int, list[float]] = collections.defaultdict(list)
         episode_lens: list[int] = []
         episode_start_indices: list[int] = []
 
@@ -355,22 +387,37 @@ class Collector:
                 episode_count += len(env_ind_local)
                 episode_lens.extend(ep_len[env_ind_local])
                 episode_returns.extend(ep_rew[env_ind_local])
+                for i, r in zip(env_ind_global, ep_rew[env_ind_local]):
+                    episode_returns_per_env[i].append(r)
                 episode_start_indices.extend(ep_idx[env_ind_local])
-                # now we copy obs_next to obs, but since there might be
-                # finished episodes, we have to reset finished envs first.
-                self._reset_env_with_ids(env_ind_local, env_ind_global, gym_reset_kwargs)
-                for i in env_ind_local:
-                    self._reset_state(i)
+                # now we copy obs_next to obs, but some episodes might be finished
+                # record the indices of unfinished episodes to continue only with them
+                if sample_equal_from_each_env:
+                    unfinished_ind_local = np.where(~done)[0]
+                # Reset finished envs otherwise
+                else:
+                    self._reset_env_with_ids(env_ind_local, env_ind_global, gym_reset_kwargs)
+                    for i in env_ind_local:
+                        self._reset_state(i)
 
                 # remove surplus env id from ready_env_ids
                 # to avoid bias in selecting environments
                 if n_episode:
-                    surplus_env_num = len(ready_env_ids) - (n_episode - episode_count)
-                    if surplus_env_num > 0:
-                        mask = np.ones_like(ready_env_ids, dtype=bool)
-                        mask[env_ind_local[:surplus_env_num]] = False
-                        ready_env_ids = ready_env_ids[mask]
-                        self.data = self.data[mask]
+                    if not sample_equal_from_each_env:
+                        surplus_env_num = len(ready_env_ids) - (n_episode - episode_count)
+                        if surplus_env_num > 0:
+                            mask = np.ones_like(ready_env_ids, dtype=bool)
+                            mask[env_ind_local[:surplus_env_num]] = False
+                            ready_env_ids = ready_env_ids[mask]
+                            self.data = self.data[mask]
+                    else:
+                        ready_env_ids = ready_env_ids[unfinished_ind_local]
+                        self.data = self.data[unfinished_ind_local]
+                        if len(unfinished_ind_local) == 0:
+                            ready_env_ids = np.arange(self.env_num)
+                            self._reset_env_to_next(gym_reset_kwargs)
+                            for i in ready_env_ids:
+                                self._reset_state(i)
 
             self.data.obs = self.data.obs_next
 
@@ -607,6 +654,8 @@ class AsyncCollector(Collector):
                 episode_count += len(env_ind_local)
                 episode_lens.extend(ep_len[env_ind_local])
                 episode_returns.extend(ep_rew[env_ind_local])
+                for i, r in zip(env_ind_global, ep_rew[env_ind_local]):
+                    episode_returns_per_env[i].append(r)
                 episode_start_indices.extend(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
