@@ -792,6 +792,36 @@ def test_collector_envpool_gym_reset_return_info():
     assert np.allclose(c0.buffer.info["env_id"], env_ids)
 
 
+def test_collector_with_vector_env():
+    writer = SummaryWriter("log/collector")
+    logger = Logger(writer)
+    env_fns = [lambda x=i: MyTestEnv(size=x, sleep=0) for i in [1, 100, 100, 100]]
+
+    dum = DummyVectorEnv(env_fns)
+    venv = SubprocVectorEnv(env_fns)
+    policy = MyPolicy()
+
+    c1 = AsyncCollector(
+        policy,
+        venv,
+        VectorReplayBuffer(total_size=100, buffer_num=4),
+        logger.preprocess_fn,
+    )
+
+    cr1 = c1.collect(n_episode=10, gym_reset_kwargs=None)
+    print(cr1.lens)
+
+    c2 = Collector(
+        policy,
+        dum,
+        VectorReplayBuffer(total_size=100, buffer_num=4),
+        logger.preprocess_fn,
+    )
+
+    c2r = c2.collect(n_episode=10, gym_reset_kwargs=None)
+    print(c2r.lens)
+
+
 if __name__ == "__main__":
     test_collector(gym_reset_kwargs=None)
     test_collector(gym_reset_kwargs={})
