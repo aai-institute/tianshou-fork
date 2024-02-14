@@ -1,8 +1,10 @@
 import time
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import asdict
 
 import numpy as np
+from matplotlib import pyplot as plt
 
 from tianshou.data import (
     Collector,
@@ -13,6 +15,44 @@ from tianshou.data import (
 )
 from tianshou.policy import BasePolicy
 from tianshou.utils import BaseLogger
+
+
+def create_episode_return_plots(returns: np.array, ep_ret_per_env: dict[str, list[float]]):
+
+    env_ids = list(ep_ret_per_env.keys())
+    env_num = len(env_ids)
+    exp_per_env = [len(ep_ret_per_env[i]) for i in env_ids]
+
+    # Combine all entries and subsets for plotting
+    data = [returns] + [sub_ret for sub_ret in ep_ret_per_env.values()]
+    # print(data)
+    # Create x-tick labels
+    xtick_labels = ['All Entries'] + [f'Subset {env}' for env in env_ids]
+
+    # Check if the dimensions are compatible
+    if len(data) != len(xtick_labels):
+        print(f"{len(data), {len(xtick_labels)} }")
+        raise ValueError(
+            "Dimensions of data and xtick_labels are not compatible.")
+
+    # Create a box plot for all entries and subsets
+    fig, ax = plt.subplots()
+    ax.boxplot(data, labels=xtick_labels)
+    ax.tick_params(axis='x', labelrotation=45)
+    ax.set_xlabel('Data Subset')
+    ax.set_ylabel('Values')
+    ax.set_title(
+        f'Box Plots of Eval Returns {env_num} tenv a {exp_per_env} exp/tenv')
+
+    fig2, ax2 = plt.subplots()
+    ax2.errorbar(range(len(data)), [np.mean(d) for d in data], [np.std(d) for d in data], fmt='o')
+    ax2.set_xticks(range(len(data)), xtick_labels, rotation=45)
+    ax2.set_xlabel('Data Subset')
+    ax2.set_ylabel('Return Mean and Std')
+    ax2.set_title(
+        f'Mean and Std of Eval Returns {env_num} tenv a {exp_per_env}  exp/tenv')
+
+    return fig, fig2
 
 
 def test_episode(
@@ -38,9 +78,13 @@ def test_episode(
         result.returns_stat = SequenceSummaryStats.from_sequence(rew)
     if logger and global_step is not None:
         assert result.n_collected_episodes > 0
+        fig1, fig2 = create_episode_return_plots(result.returns, result.episode_returns_per_env)
         result_dict = asdict(result)
-        result_dict.update({"env_num": collector.env_num})
+        result_dict.update({"episode_return_boxplot": fig1,
+                            "episode_return_error_bar": fig2})
         logger.log_test_data(result_dict, global_step)
+        plt.close(fig1)
+        plt.close(fig2)
     return result
 
 
