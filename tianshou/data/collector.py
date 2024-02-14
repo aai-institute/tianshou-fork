@@ -51,7 +51,7 @@ class CollectStats(CollectStatsBase):
     """The collected episode lengths."""
     lens_stat: SequenceSummaryStats | None  # can be None if no episode ends during collect step
     """Stats of the collected episode lengths."""
-    episode_returns_per_env: dict[str, list[float]] | None = None
+    episode_returns_per_env: dict[str, np.ndarray] | None = None
     """The collected episode returns per environment."""
 
 
@@ -97,6 +97,7 @@ class Collector:
         buffer: ReplayBuffer | None = None,
         preprocess_fn: Callable[..., RolloutBatchProtocol] | None = None,
         exploration_noise: bool = False,
+        sample_equal_from_each_env: bool = False,
     ) -> None:
         super().__init__()
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
@@ -105,6 +106,7 @@ class Collector:
             self.env = env  # type: ignore
         self.env_num = len(self.env)
         self.exploration_noise = exploration_noise
+        self.sample_equal_from_each_env = sample_equal_from_each_env
         self.buffer: ReplayBuffer
         self._assign_buffer(buffer)
         self.policy = policy
@@ -246,7 +248,6 @@ class Collector:
         render: float | None = None,
         no_grad: bool = True,
         gym_reset_kwargs: dict[str, Any] | None = None,
-        sample_equal_from_each_env: bool = False,
 
     ) -> CollectStats:
         """Collect a specified number of step or episode.
@@ -291,7 +292,7 @@ class Collector:
             ready_env_ids = np.arange(self.env_num)
         elif n_episode is not None:
             assert n_episode > 0
-            if sample_equal_from_each_env:
+            if self.sample_equal_from_each_env:
                 assert n_episode % self.env_num == 0, "n_episode must be a multiple of #env when sample_equal_from_each_env is True."
             ready_env_ids = np.arange(min(self.env_num, n_episode))
             self.data = self.data[: min(self.env_num, n_episode)]
@@ -394,7 +395,7 @@ class Collector:
                 episode_start_indices.extend(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but some episodes might be finished
                 # record the indices of unfinished episodes to continue only with them
-                if sample_equal_from_each_env:
+                if self.sample_equal_from_each_env:
                     unfinished_ind_local = np.where(~done)[0]
                 # Reset finished envs otherwise
                 else:
@@ -405,7 +406,7 @@ class Collector:
                 # remove surplus env id from ready_env_ids
                 # to avoid bias in selecting environments
                 if n_episode:
-                    if not sample_equal_from_each_env:
+                    if not self.sample_equal_from_each_env:
                         surplus_env_num = len(ready_env_ids) - (n_episode - episode_count)
                         if surplus_env_num > 0:
                             mask = np.ones_like(ready_env_ids, dtype=bool)
@@ -460,7 +461,7 @@ class Collector:
             lens_stat=SequenceSummaryStats.from_sequence(episode_lens)
             if len(episode_lens) > 0
             else None,
-            episode_returns_per_env=dict(episode_returns_per_env)
+            episode_returns_per_env={k: np.array(v) for k, v in episode_returns_per_env.items()}
         )
 
 
