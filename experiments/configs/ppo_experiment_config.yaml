@@ -19,14 +19,15 @@ sampling_config:
 #    test_seed: 1337
 
 hydra:
-  mode: MULTIRUN
-#  run:
-#    dir: ../${now:%y-%m-%d}/${now:%H-%M-%S}/${experiment_name}
-  sweeper:
-    params:
+  mode: RUN
+  run:
+    dir: log/${now:%y-%m-%d}/${now:%H-%M-%S}/ppo/${env_factory.task}
+#  mode: MULTIRUN
+#  sweeper:
+#    params:
 #      task: Pendulum-v1,HalfCheetah-v4
-      sampling_config.train_seed: 42,43
-      sampling_config.test_seed: 1337,1338
+#      sampling_config.train_seed: 0,43
+#      sampling_config.test_seed: 0,1338
 #      env_factory.task: Pendulum-v1,HalfCheetah-v4
 #      repetition: range(2)
 #      experiment:
@@ -35,6 +36,6 @@ hydra:
 #          test_seed: range(2)
 #        env_factory:
 #          task: ["Ant-v4","Pendulum-v1"]
-  sweep:
-    dir: log/ppo/${env_factory.task}
-    subdir: policy_seed_${format:${experiment_config.seed}, '{:02d}'}/train_seed_${format:${sampling_config.train_seed}, '{:02d}'}/test_seed_${format:${sampling_config.test_seed}, '{:02d}'}
+#  sweep:
+#    dir: log/ppo/${env_factory.task}
+#    subdir: policy_seed_${format:${experiment_config.seed}, '{:02d}'}/train_seed_${format:${sampling_config.train_seed}, '{:02d}'}/test_seed_${format:${sampling_config.test_seed}, '{:02d}'}
