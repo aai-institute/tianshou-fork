@@ -46,8 +46,18 @@ class SamplingConfig(ToStringMixin):
     num_train_envs: int = -1
     """the number of training environments to use. If set to -1, use number of CPUs/threads."""
 
+    train_seed: int | None = None
+    """the seed to use for the training environments. If None, the seed is not set."""
+
     num_test_envs: int = 1
     """the number of test environments to use"""
+
+    test_seed: int | None = None
+    """the seed to use for the test environments. If None, the seed is not set."""
+
+    episode_per_test: int | None = None
+    """the number of episodes to run in each test step. If None, the default number of episodes is 
+    the number of test envs"""
 
     buffer_size: int = 4096
     """the total size of the sample/replay buffer, in which environment steps (transitions) are
@@ -119,3 +129,6 @@ class SamplingConfig(ToStringMixin):
     def __post_init__(self) -> None:
         if self.num_train_envs == -1:
             self.num_train_envs = multiprocessing.cpu_count()
+
+        if self.episode_per_test is None:
+            self.episode_per_test = self.num_test_envs

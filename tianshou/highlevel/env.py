@@ -330,8 +330,8 @@ class EnvFactory(ToStringMixin, ABC):
         return self.venv_type.create_venv([lambda: self.create_env(mode)] * num_envs)
 
     def create_envs(self, num_training_envs: int, num_test_envs: int,
-                    base_train_env_seed: int|None = None,
-                    base_test_env_seed: int|None = None) -> Environments:
+                    base_train_env_seed: int | None = None,
+                    base_test_env_seed: int | None = None) -> Environments:
         """Create environments for learning.
 
         :param num_training_envs: the number of training environments

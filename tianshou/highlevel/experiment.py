@@ -222,6 +222,9 @@ class Experiment(ToStringMixin):
             envs = self.env_factory.create_envs(
                 self.sampling_config.num_train_envs,
                 self.sampling_config.num_test_envs,
+                self.sampling_config.train_seed,
+                self.sampling_config.test_seed
+
             )
             log.info(f"Created {envs}")
 

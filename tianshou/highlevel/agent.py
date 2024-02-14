@@ -184,7 +184,7 @@ class OnPolicyAgentFactory(AgentFactory, ABC):
             max_epoch=sampling_config.num_epochs,
             step_per_epoch=sampling_config.step_per_epoch,
             repeat_per_collect=sampling_config.repeat_per_collect,
-            episode_per_test=sampling_config.num_test_envs,
+            episode_per_test=sampling_config.episode_per_test,
             batch_size=sampling_config.batch_size,
             step_per_collect=sampling_config.step_per_collect,
             save_best_fn=policy_persistence.get_save_best_fn(world),
