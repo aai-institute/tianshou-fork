@@ -1,0 +1,4 @@
+_target_: examples.mujoco.mujoco_env.MujocoEnvFactory
+task: Pendulum-v1
+seed: 0
+obs_norm: true

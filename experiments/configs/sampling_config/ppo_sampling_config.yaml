@@ -1,0 +1,12 @@
+_target_: tianshou.highlevel.config.SamplingConfig
+num_epochs: 100
+step_per_epoch: 10000
+batch_size: 64
+num_train_envs: 4
+train_seed: 0
+num_test_envs: 4
+test_seed: 4
+episode_per_test: 20
+buffer_size: 4096
+step_per_collect: 2048
+repeat_per_collect: 2

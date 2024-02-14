@@ -1,0 +1,40 @@
+defaults:
+  - env_factory: mujoco_env_factory
+  - sampling_config: ppo_sampling_config
+  - policy_params: ppo_params
+  - experiment_config: hl_experiment_config
+  - _self_
+
+hidden_sizes: [64, 64]
+lr_decay: false
+
+#experiment_config:
+#  seed: 0
+
+env_factory:
+  task: "Pendulum-v1"
+sampling_config:
+  num_epochs: 10
+#    train_seed: 42
+#    test_seed: 1337
+
+hydra:
+  mode: MULTIRUN
+#  run:
+#    dir: ../${now:%y-%m-%d}/${now:%H-%M-%S}/${experiment_name}
+  sweeper:
+    params:
+#      task: Pendulum-v1,HalfCheetah-v4
+      sampling_config.train_seed: 42,43
+      sampling_config.test_seed: 1337,1338
+#      env_factory.task: Pendulum-v1,HalfCheetah-v4
+#      repetition: range(2)
+#      experiment:
+#        sampling_config:
+#          train_seed: range(2)
+#          test_seed: range(2)
+#        env_factory:
+#          task: ["Ant-v4","Pendulum-v1"]
+  sweep:
+    dir: log/ppo/${env_factory.task}
+    subdir: policy_seed_${format:${experiment_config.seed}, '{:02d}'}/train_seed_${format:${sampling_config.train_seed}, '{:02d}'}/test_seed_${format:${sampling_config.test_seed}, '{:02d}'}
