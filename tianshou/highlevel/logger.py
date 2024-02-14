@@ -5,6 +5,7 @@ from typing import Literal, TypeAlias
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.utils import BaseLogger, TensorboardLogger, WandbLogger
+from tianshou.utils.logger.pandas_logger import PandasLogger
 from tianshou.utils.string import ToStringMixin
 
 TLogger: TypeAlias = BaseLogger
@@ -27,6 +28,15 @@ class LoggerFactory(ToStringMixin, ABC):
         :param config_dict: a dictionary with data that is to be logged
         :return: the logger
         """
+
+
+class PandasLoggerFactory(LoggerFactory):
+    def create_logger(self, log_dir: str,
+                      experiment_name: str,
+                      run_id: str | None,
+                      config_dict: dict) -> TLogger:
+        return PandasLogger(log_dir,
+                            exclude_arrays=False)
 
 
 class LoggerFactoryDefault(LoggerFactory):
