@@ -6,19 +6,10 @@ from omegaconf import DictConfig
 
 from tianshou.highlevel.experiment import Experiment
 from experiments.algo_eval.run_ppo_experiment import PandasLoggerFactory  # needed to call from_directory
-# from tianshou.highlevel.logger import LoggerFactory, TLogger
-# from tianshou.utils.logger.pandas_logger import PandasLogger
+
 
 # custom path to the experiment directory, couldn't figure out how to get it from hydra yet
 exp_dir = "log/24-02-14/18-55-09/ppo/Pendulum-v1"
-
-# class PandasLoggerFactory(LoggerFactory):
-#     def create_logger(self, log_dir: str,
-#                       experiment_name: str,
-#                       run_id: str | None,
-#                       config_dict: dict) -> TLogger:
-#         return PandasLogger(log_dir,
-#                             exclude_arrays=False)
 
 
 @hydra.main(version_base=None, config_path=os.path.join(exp_dir, ".hydra"), config_name="config")
