@@ -113,7 +113,8 @@ class AgentFactory(ABC, ToStringMixin):
                 ignore_obs_next=self.sampling_config.replay_buffer_ignore_obs_next,
             )
         train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
-        test_collector = Collector(policy, envs.test_envs)
+        test_collector = Collector(policy, envs.test_envs,
+                                   sample_equal_from_each_env=self.sampling_config.sample_equal_from_each_env)
         if self.sampling_config.start_timesteps > 0:
             log.info(
                 f"Collecting {self.sampling_config.start_timesteps} initial environment steps before training (random={self.sampling_config.start_timesteps_random})",

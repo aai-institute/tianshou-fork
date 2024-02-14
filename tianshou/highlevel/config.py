@@ -59,6 +59,9 @@ class SamplingConfig(ToStringMixin):
     """the number of episodes to run in each test step. If None, the default number of episodes is 
     the number of test envs"""
 
+    sample_equal_from_each_env: bool = False
+    """whether to sample the same number of episodes from each test environment in each test step"""
+
     buffer_size: int = 4096
     """the total size of the sample/replay buffer, in which environment steps (transitions) are
     stored"""
@@ -132,3 +135,7 @@ class SamplingConfig(ToStringMixin):
 
         if self.episode_per_test is None:
             self.episode_per_test = self.num_test_envs
+
+        if self.sample_equal_from_each_env:
+            assert self.episode_per_test % self.num_test_envs == 0, \
+                "If sample_equal_from_each_env is True, episode_per_test must be divisible by num_test_envs"
