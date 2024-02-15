@@ -12,9 +12,9 @@ lr_decay: false
 #  seed: 0
 
 env_factory:
-  task: "Pendulum-v1"
-sampling_config:
-  num_epochs: 10
+  task: "HalfCheetah-v4"
+#sampling_config:
+#  num_epochs: 10
 #    train_seed: 42
 #    test_seed: 1337
 
