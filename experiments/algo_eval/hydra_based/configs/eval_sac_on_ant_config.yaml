@@ -1,0 +1,70 @@
+# eval_sac_on_ant_config
+defaults:
+  - override hydra/launcher: joblib
+
+env_factory:
+  _target_: examples.mujoco.mujoco_env.MujocoEnvFactory
+  task: Ant-v4
+  seed: 0
+  obs_norm: true
+sampling_config:
+  _target_: tianshou.highlevel.config.SamplingConfig
+  step_per_collect: 4
+  update_per_step: 0.25
+  buffer_size: 1_000_000
+  num_epochs: 100
+  step_per_epoch: 10000
+  batch_size: 256
+  num_train_envs: 4
+  train_seed: 0
+  num_test_envs: 8
+  test_seed: 1337
+  episode_per_test: 32
+  sample_equal_from_each_env: true
+  start_timesteps: 10000
+  start_timesteps_random: true
+policy_params:
+  _target_: tianshou.highlevel.params.policy_params.SACParams
+  action_bound_method: "clip"
+  action_scaling: "default"
+  deterministic_eval: true
+  exploration_noise: null
+  gamma: 0.99
+  tau: 0.005
+  alpha:
+    _target_: tianshou.highlevel.params.alpha.AutoAlphaFactoryDefault
+    lr: 3.0e-4
+  estimation_step: 1
+  actor_lr: 1.0e-3
+  critic1_lr: 1.0e-3
+  critic2_lr: 1.0e-3
+  actor_lr_scheduler_factory: null
+  critic1_lr_scheduler_factory: null
+  critic2_lr_scheduler_factory: null
+experiment_config:
+  _target_: tianshou.highlevel.experiment.ExperimentConfig
+  seed: 0
+  watch: false
+  watch_render: 0.0
+  persistence_base_dir: ???
+logger_factory:
+  _target_: tianshou.highlevel.logger.LoggerManagerFactory
+  logger_types: ['tensorboard', 'pandas']
+  wandb_project: "sac_ant"
+
+
+_target_: experiments.exp_builders.sac_exp_builder.SACSeededExperimentFactory
+hidden_sizes: [256, 256]
+
+
+hydra:
+  launcher:
+    n_jobs: 10
+  mode: MULTIRUN
+  sweeper:
+    params:
+      experiment_config.seed: 0,1,2,3,4,5,6,7,8,9
+      sampling_config.train_seed: 0,10,100,1000
+  sweep:
+    dir: log/${now:%Y-%m-%d}/${now:%H-%M-%S}/sac/${env_factory.task}
+    subdir: ${short_dir:${hydra.job.override_dirname}, 3}

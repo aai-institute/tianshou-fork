@@ -1,0 +1,89 @@
+from dataclasses import dataclass, field
+from typing import Sequence
+
+import numpy as np
+from joblib import Parallel, delayed
+
+from experiments.algo_eval.utils import shortener
+from experiments.exp_builders import SeededExperimentFactory
+
+
+@dataclass
+class JoblibConfig:
+    n_jobs: int = 1
+    backend: str = "loky"
+    verbose: int = 10
+
+
+@dataclass
+class ExperimentResults:
+    algorithms: list[str]
+    score_dict: dict[str, np.ndarray]  # (n_runs x n_epochs)
+    env_steps: np.ndarray  # (n_epochs)
+    score_thresholds: np.ndarray
+
+
+@dataclass
+class SeedConfiguration:
+    policy_seeds: Sequence[int] = field(default_factory=lambda: [0, 1, 2, 3, 4])
+    train_env_seeds: Sequence[int] | Sequence[Sequence[int]] = field(default_factory=lambda: [1000, 2000, 3000, 4000])
+    test_env_seeds: Sequence[int] | Sequence[Sequence[int]] = field(default_factory=lambda: [1337])
+
+
+class SeedVariabilityAnalysis:
+    def __init__(self,
+                 seed_config: SeedConfiguration,
+                 seeded_experiment_factory: SeededExperimentFactory):
+        self.seed_config = seed_config
+        self.seeded_experiment_factory = seeded_experiment_factory
+
+    def run_sequential(self):
+        results = []
+
+        for policy_seed in self.seed_config.policy_seeds:
+            for train_seed in self.seed_config.train_env_seeds:
+                for test_seed in self.seed_config.test_env_seeds:
+                    experiment = self.seeded_experiment_factory.create_experiment(policy_seed, train_seed, test_seed)
+                    full_name = f"policy_seed={policy_seed},train_seed={train_seed},test_seed={test_seed}"
+                    experiment_name = shortener(full_name, 3)
+                    results.append(experiment.run(experiment_name))
+
+    def run_joblib_local(self, joblib_config: JoblibConfig):
+        for experiment in self.build_experiments():
+            experiment_name = f"{self.env_factory.task}_seed_{experiment.config.seed}"  # TODO: based on subdir
+            Parallel(n_jobs=joblib_config.n_jobs)(delayed(experiment.run)(experiment_name) for _ in range(joblib_config.n_jobs))
+
+    @staticmethod
+    def eval_results(results: ExperimentResults):
+        import matplotlib.pyplot as plt
+        import scipy.stats as sst
+        import seaborn as sns
+        from rliable import library as rly
+        from rliable import plot_utils
+
+        iqm = lambda scores: sst.trim_mean(scores, proportiontocut=0.25, axis=0)
+        iqm_scores, iqm_cis = rly.get_interval_estimates(
+            results.score_dict, iqm, reps=50000)
+
+        # Plot IQM sample efficiency curve
+        fig, ax = plt.subplots(ncols=1, figsize=(7, 5))
+        plot_utils.plot_sample_efficiency_curve(
+            results.env_steps, iqm_scores, iqm_cis, algorithms=results.algorithms,
+            xlabel=r'Number of env steps',
+            ylabel='IQM episode return',
+            ax=ax)
+        plt.savefig('iqm_sample_efficiency_curve.png')
+
+        final_score_dict = {algo: returns[:, [-1]] for algo, returns in results.score_dict.items()}
+        score_distributions, score_distributions_cis = rly.create_performance_profile(
+            final_score_dict, results.score_thresholds)
+
+        # Plot score distributions
+        fig, ax = plt.subplots(ncols=1, figsize=(7, 5))
+        plot_utils.plot_performance_profiles(
+            score_distributions, results.score_thresholds,
+            performance_profile_cis=score_distributions_cis,
+            colors=dict(zip(results.algorithms, sns.color_palette('colorblind'))),
+            xlabel=r'Episode return $(\tau)$',
+            ax=ax)
+        plt.savefig('performance_profile.png')

@@ -1,3 +1,4 @@
+# ppo_experiment_config
 defaults:
   - env_factory: mujoco_env_factory
   - sampling_config: ppo_sampling_config
@@ -7,6 +8,9 @@ defaults:
 
 hidden_sizes: [64, 64]
 lr_decay: false
+
+#experiment_config:
+#  persistence_base_dir: ???
 
 #experiment_config:
 #  seed: 0

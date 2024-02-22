@@ -9,27 +9,14 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 import torch
 
+from experiments.algo_eval.utils import shortener
 from tianshou.highlevel.experiment import PPOExperimentBuilder
-from tianshou.highlevel.logger import PandasLoggerFactory
+from tianshou.highlevel.logger import LoggerManagerFactory
 from tianshou.highlevel.params.lr_scheduler import LRSchedulerFactoryLinear
 
+
+OmegaConf.register_new_resolver("short_dir", shortener)
 OmegaConf.register_new_resolver("format", lambda inpt, formatter: formatter.format(inpt))
-
-
-@dataclass
-class PPOEvalConfig:
-    task: str = "Pendulum-v1"
-    policy_seeds: Sequence[int] = field(default_factory=lambda: [0, 1, 2, 3, 4])
-    base_train_env_seed: int = 42
-    base_test_env_seed: int = 1337
-
-
-@dataclass
-class PPOEvalTrainSeedConfig:
-    task: str = "Pendulum-v1"
-    policy_seeds: int = 0
-    base_train_env_seed: Sequence[int] = field(default_factory=lambda: [42, 1000, 2000, 3000, 4000])
-    base_test_env_seed: int = 1337
 
 
 # cs = ConfigStore.instance()
@@ -37,10 +24,16 @@ class PPOEvalTrainSeedConfig:
 # cs.store(name="ppo_eval_config", group="eval_config", node=PPOEvalConfig)
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="ppo_experiment_config")
+@hydra.main(version_base=None, config_path="../../configs", config_name="ppo_experiment_config")
 def run_exp(cfg: DictConfig):
     print(cfg)
-    experiment_config = hydra.utils.instantiate(cfg.experiment_config)
+    log_dir = HydraConfig.get().runtime.output_dir
+    log_base_dir, experiment_name = os.path.split(log_dir)
+    print(log_base_dir)
+    experiment_config = hydra.utils.instantiate(cfg.experiment_config,
+                                                persistence_base_dir=log_base_dir,
+                                                # device=f"cuda:{HydraConfig.get().job.num % 4}"
+                                                )
     sampling_config = hydra.utils.instantiate(cfg.sampling_config)
 
     lr_scheduler = LRSchedulerFactoryLinear(sampling_config) if cfg.lr_decay else None
@@ -61,12 +54,10 @@ def run_exp(cfg: DictConfig):
             cfg.hidden_sizes,
             hidden_activation=torch.nn.Tanh,
         )
-        .with_logger_factory(PandasLoggerFactory())
+        .with_logger_factory(LoggerManagerFactory(['tensorboard', 'pandas'], HydraConfig.get().job.name))
         .build())
 
-    log_name = HydraConfig.get().runtime.output_dir
-    print(log_name)
-    experiment_result = experiment.run(log_name)
+    experiment_result = experiment.run(experiment_name)
     print(experiment_result)
 
 

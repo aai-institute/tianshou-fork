@@ -1,4 +1,5 @@
 import os
+from abc import ABC, abstractmethod
 
 import hydra
 import numpy as np
@@ -7,11 +8,10 @@ from matplotlib import pyplot as plt
 from omegaconf import DictConfig
 
 from tianshou.highlevel.experiment import Experiment
-from experiments.algo_eval.run_ppo_experiment import PandasLoggerFactory  # needed to call from_directory
-
+from tianshou.utils.logger.pandas_logger import PandasLogger
 
 # custom path to the experiment directory, couldn't figure out how to get it from hydra yet
-exp_dir = "log/24-02-15/11-17-36/ppo/HalfCheetah-v4"
+exp_dir = "../log/24-02-19/15-48-56/ppo/HalfCheetah-v4"
 
 
 @hydra.main(version_base=None, config_path=os.path.join(exp_dir, ".hydra"), config_name="config")
@@ -19,8 +19,8 @@ def eval_exp(cfg: DictConfig):
     print(os.getcwd())
     log_dir = os.path.join(os.getcwd(), exp_dir)
 
-    experiment = Experiment.from_directory(log_dir)
-    logger = experiment.logger_factory.create_logger(log_dir, None, None, None)
+    # experiment = Experiment.from_directory(log_dir)
+    logger = PandasLogger(log_dir)
     logger.restore_data()
 
     train_data = logger.data['train']
@@ -39,10 +39,10 @@ def eval_exp(cfg: DictConfig):
 
     test_episode_returns_per_env = np.zeros((n_iter, n_test_envs, n_ret_per_env))
     for i in range(cfg.sampling_config.num_test_envs):
-        test_episode_returns_per_env[:, i, :] = np.stack([iter_data[f'test/episode_returns_per_env/env_{i}'] for iter_data in test_data])
+        test_episode_returns_per_env[:, i, :] = np.stack([iter_data['episode_returns_per_env'][f'env_{i}'] for iter_data in test_data])
 
-    train_avg_return = np.array([d['train/returns_stat/mean'] for d in train_data])
-    train_std_return = np.array([d['train/returns_stat/std'] for d in train_data])
+    train_avg_return = np.array([d['returns_stat']['mean'] for d in train_data])
+    train_std_return = np.array([d['returns_stat']['std'] for d in train_data])
 
     test_return_sets = {i: {} for i in range(split)}
 
