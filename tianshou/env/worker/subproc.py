@@ -2,9 +2,9 @@ import ctypes
 import time
 from collections import OrderedDict
 from collections.abc import Callable
+import multiprocessing
 from multiprocessing import Array, Pipe, connection
-from multiprocessing.context import Process
-from typing import Any
+from typing import Any, Literal
 
 import gymnasium as gym
 import numpy as np
@@ -122,7 +122,8 @@ def _worker(
 class SubprocEnvWorker(EnvWorker):
     """Subprocess worker used in SubprocVectorEnv and ShmemVectorEnv."""
 
-    def __init__(self, env_fn: Callable[[], gym.Env], share_memory: bool = False) -> None:
+    def __init__(self, env_fn: Callable[[], gym.Env], share_memory: bool = False,
+                 context: Literal['fork', 'spawn'] | None = None) -> None:
         self.parent_remote, self.child_remote = Pipe()
         self.share_memory = share_memory
         self.buffer: dict | tuple | ShArray | None = None
@@ -138,7 +139,8 @@ class SubprocEnvWorker(EnvWorker):
             CloudpickleWrapper(env_fn),
             self.buffer,
         )
-        self.process = Process(target=_worker, args=args, daemon=True)
+        ctxt = multiprocessing.get_context(context)
+        self.process = ctxt.Process(target=_worker, args=args, daemon=True)
         self.process.start()
         self.child_remote.close()
         super().__init__(env_fn)

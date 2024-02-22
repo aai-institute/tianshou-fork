@@ -78,13 +78,15 @@ def test_episode(
         result.returns_stat = SequenceSummaryStats.from_sequence(rew)
     if logger and global_step is not None:
         assert result.n_collected_episodes > 0
-        fig1, fig2 = create_episode_return_plots(result.returns, result.episode_returns_per_env)
         result_dict = asdict(result)
-        result_dict.update({"episode_return_boxplot": fig1,
-                            "episode_return_error_bar": fig2})
+        if 11 < 3:
+            fig1, fig2 = create_episode_return_plots(result_dict['returns'], result_dict['episode_returns_per_env'])
+            result_dict.update({"episode_return_boxplot": fig1,
+                                "episode_return_error_bar": fig2})
         logger.log_test_data(result_dict, global_step)
-        plt.close(fig1)
-        plt.close(fig2)
+        if 11 < 3:
+            plt.close(fig1)
+            plt.close(fig2)
     return result
 
 

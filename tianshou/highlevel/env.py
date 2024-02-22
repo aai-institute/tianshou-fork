@@ -334,13 +334,19 @@ class EnvFactory(ToStringMixin, ABC):
                     base_test_env_seed: int | None = None) -> Environments:
         """Create environments for learning.
 
+        :param base_train_env_seed: override the base train environment seed
+        :param base_test_env_seed: override the base test environment seed
         :param num_training_envs: the number of training environments
         :param num_test_envs: the number of test environments
         :return: the environments
         """
         env = self.create_env(EnvMode.TRAIN)
-        train_envs = self.create_venv(num_training_envs, EnvMode.TRAIN, base_train_env_seed)
-        test_envs = self.create_venv(num_test_envs, EnvMode.TEST, base_test_env_seed)
+        train_envs = self.create_venv(num_training_envs, EnvMode.TRAIN)
+        test_envs = self.create_venv(num_test_envs, EnvMode.TEST)
+        if base_train_env_seed is not None:  # moved it to here for now to avoid inconsistent arguments to create_env, may break with envpool
+            train_envs.seed(base_train_env_seed)
+        if base_test_env_seed is not None:
+            test_envs.seed(base_test_env_seed)
         match EnvType.from_env(env):
             case EnvType.DISCRETE:
                 return DiscreteEnvironments(env, train_envs, test_envs)
@@ -408,8 +414,7 @@ class EnvFactoryRegistered(EnvFactory):
         kwargs = self._create_kwargs(mode)
         return gymnasium.make(self.task, **kwargs)
 
-    def create_venv(self, num_envs: int, mode: EnvMode,
-                    base_env_seed: int|None = None) -> BaseVectorEnv:
+    def create_venv(self, num_envs: int, mode: EnvMode) -> BaseVectorEnv:
         if self.envpool_factory is not None:
             return self.envpool_factory.create_venv(
                 self.task,
@@ -420,8 +425,5 @@ class EnvFactoryRegistered(EnvFactory):
             )
         else:
             venv = super().create_venv(num_envs, mode)
-            if base_env_seed is not None:
-                venv.seed([base_env_seed + i for i in range(num_envs)])
-            else:
-                venv.seed(self.seed)
+            venv.seed(self.seed)
             return venv

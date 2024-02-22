@@ -61,47 +61,6 @@ class BaseLogger(ABC):
         :param data: the data to write with format ``{key: value}``.
         """
 
-    @staticmethod
-    def prepare_dict_for_logging(
-        input_dict: dict[str, Any],
-        parent_key: str = "",
-        delimiter: str = "/",
-        exclude_arrays: bool = True,
-    ) -> dict[str, VALID_LOG_VALS_TYPE]:
-        """Flattens and filters a nested dictionary by recursively traversing all levels and compressing the keys.
-
-        Filtering is performed with respect to valid logging data types.
-
-        :param input_dict: The nested dictionary to be flattened and filtered.
-        :param parent_key: The parent key used as a prefix before the input_dict keys.
-        :param delimiter: The delimiter used to separate the keys.
-        :param exclude_arrays: Whether to exclude numpy arrays from the output.
-        :return: A flattened dictionary where the keys are compressed and values are filtered.
-        """
-        result = {}
-
-        def add_to_result(
-            cur_dict: dict,
-            prefix: str = "",
-        ) -> None:
-            for key, value in cur_dict.items():
-                if exclude_arrays and isinstance(value, np.ndarray):
-                    continue
-
-                new_key = prefix + delimiter + key
-                new_key = new_key.lstrip(delimiter)
-
-                if isinstance(value, dict):
-                    add_to_result(
-                        value,
-                        new_key,
-                    )
-                elif isinstance(value, VALID_LOG_VALS):
-                    result[new_key] = value
-
-        add_to_result(input_dict, prefix=parent_key)
-        return result
-
     def log_train_data(self, log_data: dict, step: int) -> None:
         """Use writer to log statistics generated during training.
 
@@ -110,7 +69,7 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method
         if step - self.last_log_train_step >= self.train_interval:
-            log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.TRAIN.value)
+            # log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.TRAIN.value)
             self.write("train/env_step", step, log_data)
             self.last_log_train_step = step
 
@@ -122,8 +81,8 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method (stupid because log_test_data is only called from function in utils.py, not from BaseTrainer)
         if step - self.last_log_test_step >= self.test_interval:
-            log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.TEST.value,
-                                                     exclude_arrays=self.exclude_arrays)
+            # log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.TEST.value,
+            #                                          exclude_arrays=self.exclude_arrays)
             self.write(DataScope.TEST.value + "/env_step", step, log_data)
             self.last_log_test_step = step
 
@@ -135,7 +94,7 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method
         if step - self.last_log_update_step >= self.update_interval:
-            log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.UPDATE.value)
+            # log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.UPDATE.value)
             self.write(DataScope.UPDATE.value + "/gradient_step", step, log_data)
             self.last_log_update_step = step
 
@@ -148,7 +107,7 @@ class BaseLogger(ABC):
         if (
             step - self.last_log_info_step >= self.info_interval
         ):  # TODO: move interval check to calling method
-            log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.INFO.value)
+            # log_data = self.prepare_dict_for_logging(log_data, parent_key=DataScope.INFO.value)
             self.write(DataScope.INFO.value + "/epoch", step, log_data)
             self.last_log_info_step = step
 
@@ -200,3 +159,36 @@ class LazyLogger(BaseLogger):
 
     def restore_data(self) -> tuple[int, int, int]:
         return 0, 0, 0
+
+
+class LoggerManager(BaseLogger):
+    """An array of loggers that holds more than one logger."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.loggers = []
+
+    def write(self, step_type: str, step: int, data: dict[str, VALID_LOG_VALS_TYPE]) -> None:
+        for logger in self.loggers:
+            data_copy = data.copy()
+            logger.write(step_type, step, data_copy)
+
+    def save_data(
+        self,
+        epoch: int,
+        env_step: int,
+        gradient_step: int,
+        save_checkpoint_fn: Callable[[int, int, int], str] | None = None,
+    ) -> None:
+        for logger in self.loggers:
+            logger.save_data(epoch, env_step, gradient_step, save_checkpoint_fn)
+
+    def restore_data(self) -> tuple[int, int, int]:
+        for logger in self.loggers:
+             epoch, env_step, gradient_step = logger.restore_data()
+
+        self.last_save_step = self.last_log_test_step = epoch
+        self.last_log_update_step = gradient_step
+        self.last_log_train_step = env_step
+
+        return epoch, env_step, gradient_step

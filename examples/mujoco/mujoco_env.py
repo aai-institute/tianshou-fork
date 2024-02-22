@@ -74,9 +74,11 @@ class MujocoEnvFactory(EnvFactoryRegistered):
         )
         self.obs_norm = obs_norm
 
-    def create_envs(self, num_training_envs: int, num_test_envs: int,
-                    base_train_env_seed: int|None = None,
-                    base_test_env_seed: int|None = None) -> ContinuousEnvironments:
+    def create_envs(self,
+                    num_training_envs: int,
+                    num_test_envs: int,
+                    base_train_env_seed: int | None = None,
+                    base_test_env_seed: int | None = None) -> ContinuousEnvironments:
         envs = super().create_envs(num_training_envs, num_test_envs,
                                    base_train_env_seed, base_test_env_seed)
         assert isinstance(envs, ContinuousEnvironments)

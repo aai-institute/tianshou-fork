@@ -378,7 +378,7 @@ class SubprocVectorEnv(BaseVectorEnv):
 
     def __init__(self, env_fns: list[Callable[[], ENV_TYPE]], **kwargs: Any) -> None:
         def worker_fn(fn: Callable[[], gym.Env]) -> SubprocEnvWorker:
-            return SubprocEnvWorker(fn, share_memory=False)
+            return SubprocEnvWorker(fn, share_memory=False, context='fork')
 
         super().__init__(env_fns, worker_fn, **kwargs)
 
@@ -395,7 +395,7 @@ class ShmemVectorEnv(BaseVectorEnv):
 
     def __init__(self, env_fns: list[Callable[[], ENV_TYPE]], **kwargs: Any) -> None:
         def worker_fn(fn: Callable[[], gym.Env]) -> SubprocEnvWorker:
-            return SubprocEnvWorker(fn, share_memory=True)
+            return SubprocEnvWorker(fn, share_memory=True, context='fork')
 
         super().__init__(env_fns, worker_fn, **kwargs)
 

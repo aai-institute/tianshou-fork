@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 from tensorboard.backend.event_processing import event_accumulator
 from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.utils.logger.base import VALID_LOG_VALS_TYPE, BaseLogger
+from tianshou.utils.logger.base import VALID_LOG_VALS_TYPE, BaseLogger, VALID_LOG_VALS
 from tianshou.utils.warning import deprecation
 
 
@@ -39,7 +39,51 @@ class TensorboardLogger(BaseLogger):
         self.last_save_step = -1
         self.writer = writer
 
-    def write(self, step_type: str, step: int, data: dict[str, VALID_LOG_VALS_TYPE]) -> None:
+    @staticmethod
+    def prepare_dict_for_logging(
+        input_dict: dict[str, Any],
+        parent_key: str = "",
+        delimiter: str = "/",
+        exclude_arrays: bool = True,
+    ) -> dict[str, VALID_LOG_VALS_TYPE]:
+        """Flattens and filters a nested dictionary by recursively traversing all levels and compressing the keys.
+
+        Filtering is performed with respect to valid logging data types.
+
+        :param input_dict: The nested dictionary to be flattened and filtered.
+        :param parent_key: The parent key used as a prefix before the input_dict keys.
+        :param delimiter: The delimiter used to separate the keys.
+        :param exclude_arrays: Whether to exclude numpy arrays from the output.
+        :return: A flattened dictionary where the keys are compressed and values are filtered.
+        """
+        result = {}
+
+        def add_to_result(
+            cur_dict: dict,
+            prefix: str = "",
+        ) -> None:
+            for key, value in cur_dict.items():
+                if exclude_arrays and isinstance(value, np.ndarray):
+                    continue
+
+                new_key = prefix + delimiter + key
+                new_key = new_key.lstrip(delimiter)
+
+                if isinstance(value, dict):
+                    add_to_result(
+                        value,
+                        new_key,
+                    )
+                elif isinstance(value, VALID_LOG_VALS):
+                    result[new_key] = value
+
+        add_to_result(input_dict, prefix=parent_key)
+        return result
+
+    def write(self, step_type: str, step: int, data: dict[str, Any]) -> None:
+        scope, step_name = step_type.split("/")
+        data = self.prepare_dict_for_logging(data, parent_key=scope,
+                                             exclude_arrays=self.exclude_arrays)
         for k, v in data.items():
             if isinstance(v, np.ndarray):
                 self.writer.add_histogram(k, v, global_step=step, bins="auto")
