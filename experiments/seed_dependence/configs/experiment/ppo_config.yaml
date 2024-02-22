@@ -1,0 +1,66 @@
+---
+#algo: "ppo"
+#task: "Ant-v4"
+#seed: 0
+#logger: "tensorboard"
+#logdir: "log"
+
+# Actor
+
+_target_: experiments.seed_dependence.ppo_actor_critic_builder.PPOWithActorCriticExperimentBuilder
+hidden_sizes: [64, 64]
+experiment_config:
+  _target_: tianshou.highlevel.experiment.ExperimentConfig
+  seed: 0
+  watch: false
+  watch_render: 0.0
+
+sampling_config:
+  _target_: tianshou.highlevel.config.SamplingConfig
+  num_epochs: 100
+  step_per_epoch: 10000
+  batch_size: 64
+  num_train_envs: 4
+  train_seed: 0
+  num_test_envs: 4
+  test_seed: 4
+  episode_per_test: 20
+  buffer_size: 4096
+  step_per_collect: 2048
+  repeat_per_collect: 2
+
+env_factory:
+  _target_: examples.mujoco.mujoco_env.MujocoEnvFactory
+  task: "Ant-v4"
+  seed: 0
+  obs_norm: true
+
+policy_params:
+  _target_: tianshou.highlevel.params.policy_params.PPOParams
+  deterministic_eval: false
+  discount_factor: 0.99
+  gae_lambda: 0.95
+  action_bound_method: "clip"
+  reward_normalization: true
+  ent_coef: 0.0
+  vf_coef: 0.25
+  max_grad_norm: 0.5
+  value_clip: false
+  advantage_normalization: false
+  eps_clip: 0.2
+  dual_clip: ~
+  recompute_advantage: true
+  lr: 3.0e-4
+  lr_scheduler_factory:
+    _target_: tianshou.highlevel.params.lr_scheduler.LRSchedulerFactoryLinear
+    sampling_config: ${sampling_config}
+  dist_fn:
+    _target_: tianshou.highlevel.params.dist_fn.DistributionFunctionFactoryIndependentGaussians
+
+#experiment:
+#  _target_: experiments.seed_dependence.seed_dep_experiment.PPOWithActorCriticExperimentBuilder
+#  env_factory: ${env_factory}
+#  experiment_config: ${experiment_config}
+#  sampling_config: ${sampling_config}
+#  ppo_params: ${ppo_params}
+#  hidden_sizes: ${hidden_sizes}

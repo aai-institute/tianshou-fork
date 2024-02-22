@@ -1,0 +1,4 @@
+_target_: tianshou.highlevel.experiment.ExperimentConfig
+seed: 0
+watch: false
+watch_render: 0.0
