@@ -15,8 +15,9 @@ class SACSeededExperimentFactory(SeededExperimentFactory):
                  experiment_config: ExperimentConfig,
                  sampling_config: SamplingConfig,
                  policy_params: SACParams,
+                 hidden_sizes: Sequence[int],
                  logger_factory: LoggerFactory,
-                 hidden_sizes: Sequence[int]):
+                 ):
         self.hidden_sizes = hidden_sizes
         self.experiment_config = experiment_config
         self.sampling_config = sampling_config
@@ -24,13 +25,16 @@ class SACSeededExperimentFactory(SeededExperimentFactory):
         self.logger_factory = logger_factory
         self.env_factory = env_factory
 
-    def create_experiment(self, policy_seed: int, train_seed, test_seed) -> Experiment:
+    def create_experiment(self, policy_seed: int | None, train_seed: int | None, test_seed: int | None) -> Experiment:
         experiment_config = copy(self.experiment_config)
-        experiment_config.seed = policy_seed
+        if policy_seed is not None:
+            experiment_config.seed = policy_seed
 
         sampling_config = copy(self.sampling_config)
-        sampling_config.train_seed = train_seed
-        sampling_config.test_seed = test_seed
+        if train_seed is not None:
+            sampling_config.train_seed = train_seed
+        if test_seed is not None:
+            sampling_config.test_seed = test_seed
 
         return SACExperimentBuilder(self.env_factory, experiment_config, sampling_config) \
             .with_sac_params(self.policy_params) \

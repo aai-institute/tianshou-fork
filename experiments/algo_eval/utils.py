@@ -37,3 +37,8 @@ def watch_experiment_policy(log_dir):
 
     experiment_result = experiment.run('watch')
     return experiment_result
+
+
+if __name__ == "__main__":
+    watch_experiment_policy('/tmp/see=0,tra_see=0')
+

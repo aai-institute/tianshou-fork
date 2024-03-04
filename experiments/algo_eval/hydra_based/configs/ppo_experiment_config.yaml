@@ -1,31 +1,21 @@
 # ppo_experiment_config
 defaults:
-  - env_factory: mujoco_env_factory
-  - sampling_config: ppo_sampling_config
-  - policy_params: ppo_params
-  - experiment_config: hl_experiment_config
+  - experiment: ppo_experiment
   - _self_
 
 hidden_sizes: [64, 64]
 lr_decay: false
 
-#experiment_config:
-#  persistence_base_dir: ???
-
-#experiment_config:
-#  seed: 0
-
-env_factory:
-  task: "HalfCheetah-v4"
-#sampling_config:
-#  num_epochs: 10
-#    train_seed: 42
-#    test_seed: 1337
+experiment:
+  env_factory:
+    task: "HalfCheetah-v4"
+    venv_kwargs:
+      context: fork
 
 hydra:
   mode: RUN
   run:
-    dir: log/${now:%y-%m-%d}/${now:%H-%M-%S}/ppo/${env_factory.task}
+    dir: log/${now:%y-%m-%d}/${now:%H-%M-%S}/ppo/${experiment.env_factory.task}
 #  mode: MULTIRUN
 #  sweeper:
 #    params:

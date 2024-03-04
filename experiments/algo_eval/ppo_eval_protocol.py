@@ -5,11 +5,12 @@ from typing import Sequence
 import numpy as np
 
 from examples.mujoco.mujoco_env import MujocoEnvFactory
-from experiments.algo_eval.seed_analysis import SeedConfiguration, SeedVariabilityAnalysis, ExperimentResults
+from experiments.algo_eval.seed_analysis import SeedConfiguration, SeedVariabilityAnalysis, ExperimentResults, \
+    JoblibConfig
 from experiments.algo_eval.utils import shortener
 from experiments.exp_builders.ppo_exp_builder import PPOSeededExperimentFactory
 from tianshou.highlevel.config import SamplingConfig
-from tianshou.highlevel.env import EnvFactoryRegistered
+from tianshou.highlevel.env import EnvFactoryRegistered, VectorEnvType
 from tianshou.highlevel.experiment import ExperimentConfig
 from tianshou.highlevel.logger import LoggerManagerFactory
 from tianshou.highlevel.params.dist_fn import DistributionFunctionFactoryIndependentGaussians
@@ -53,9 +54,10 @@ class PPOEvalConfig:
 
 
 if __name__ == "__main__":
+
     seed_config = SeedConfiguration(
-        policy_seeds=list(range(3)),
-        train_env_seeds=list(range(3)),
+        policy_seeds=list(range(2)),
+        train_env_seeds=list(range(2)),
         test_env_seeds=[1337],
     )
 
@@ -63,17 +65,18 @@ if __name__ == "__main__":
         seed=0,
         watch=False,
         watch_render=0.0,
+        log_file_enabled=True
     )
 
     sampling_config = SamplingConfig(
         step_per_collect=2048,
         buffer_size=2048,
-        num_epochs=10,
+        num_epochs=1,
         step_per_epoch=2048,
         batch_size=64,
-        num_train_envs=64,
+        num_train_envs=2,
         train_seed=0,
-        num_test_envs=8,
+        num_test_envs=2,
         test_seed=1337,
         episode_per_test=32,
         sample_equal_from_each_env=True,
@@ -102,6 +105,16 @@ if __name__ == "__main__":
         task="HalfCheetah-v4",
         seed=0,
         obs_norm=True,
+        context='fork',
+        # venv_type=VectorEnvType.DUMMY
+    )
+
+    joblib_config = JoblibConfig(
+        n_jobs=2,
+        # backend="multiprocessing",
+        # require="sharedmem",
+        # prefer="processes",
+        verbose=10,
     )
 
     algo_config = PPOEvalConfig(seed_config=seed_config,
@@ -120,7 +133,7 @@ if __name__ == "__main__":
                                                                                 'ppo_eval'))
 
     seed_variability_analysis = SeedVariabilityAnalysis(seed_config, seeded_experiment_factory)
-    seed_variability_analysis.run_sequential()
+    results = seed_variability_analysis.run_joblib_local(joblib_config)
 
     test_episode_returns = []
     for test_seed in seed_config.test_env_seeds:

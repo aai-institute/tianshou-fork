@@ -1,4 +1,4 @@
-# eval_ppo_on_halfcheetah_config
+# eval_ppo_on_halfcheetah_with_global_seed_config
 defaults:
   - override hydra/launcher: joblib
 
@@ -16,7 +16,7 @@ sampling_config:
   step_per_epoch: 20480
   batch_size: 64
   num_train_envs: 64
-  train_seed: 0
+  train_seed: ${experiment_config.seed}
   num_test_envs: 8
   test_seed: 1337
   episode_per_test: 32
@@ -58,12 +58,12 @@ hidden_sizes: [64, 64]
 
 hydra:
   launcher:
-    n_jobs: 2
+    n_jobs: 10
   mode: MULTIRUN
   sweeper:
     params:
-      experiment_config.seed: 0,1,2,3,4,5,6,7,8,9
-      sampling_config.train_seed: 0,10,100,1000
+      experiment_config.seed: range(40)
+#      sampling_config.train_seed: 0,10,100,1000
 #      sampling_config.test_seed: 0,1338
 
 

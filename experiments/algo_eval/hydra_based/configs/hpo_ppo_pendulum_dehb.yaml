@@ -1,0 +1,48 @@
+# hpo_ppo_pendulum_config
+defaults:
+  - experiment: ppo_experiment
+  - search_space: ppo
+  - override hydra/sweeper: DEHB
+  - override hydra/launcher: joblib
+  - _self_
+
+#seed: -1  # will be overridden by the sweeper, uses mean aggregation in DEHB
+
+n_eval_episodes: 32
+aggregate_fn: iqm
+seed_config:
+  policy_seeds: [0, 1, 2, 3, 4]
+  train_env_seeds: [0]
+  test_env_seeds: [1337]
+
+experiment:
+#  sampling_config:
+#    num_epochs: 10
+  logger_factory:
+    _target_: tianshou.highlevel.logger.LoggerManagerFactory
+    logger_types: ['tensorboard', 'pandas']
+    wandb_project: hpo_ppo_pendulum
+
+
+hydra:
+  mode: MULTIRUN
+  run:
+    dir: log/hpo/ppo/${experiment.env_factory.task}/${now:%y-%m-%d}/${now:%H-%M-%S}
+  launcher:
+    n_jobs: 8
+  sweeper:
+    dehb_kwargs:
+      mutation_factor: 0.2
+      max_budget: ${experiment.sampling_config.num_epochs}
+      min_budget: 1
+      deepcave: true
+      eta: 5
+#      seeds: [0,1]
+    search_space: ${search_space}
+    total_brackets: 3
+    budget_variable: experiment.sampling_config.num_epochs
+    n_jobs: 8
+  sweep:
+    dir: log/hpo/ppo/${experiment.env_factory.task}/${now:%y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${short_dir:${hydra.job.override_dirname}, 3}
+#    subdir: policy_seed_${format:${experiment_config.seed}, '{:02d}'}/train_seed_${format:${sampling_config.train_seed}, '{:02d}'}/test_seed_${format:${sampling_config.test_seed}, '{:02d}'}

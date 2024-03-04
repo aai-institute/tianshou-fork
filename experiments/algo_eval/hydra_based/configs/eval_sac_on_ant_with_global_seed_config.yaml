@@ -1,4 +1,4 @@
-# eval_sac_on_ant_config
+# eval_sac_on_ant_with_global_seed_config
 defaults:
   - override hydra/launcher: joblib
 
@@ -56,18 +56,15 @@ logger_factory:
 
 _target_: experiments.exp_builders.sac_exp_builder.SACSeededExperimentFactory
 hidden_sizes: [256, 256]
-policy_seed: null
-train_seed: null
-test_seed: null
+
 
 hydra:
   launcher:
-    n_jobs: 2
+    n_jobs: 10
   mode: MULTIRUN
   sweeper:
     params:
-      policy_seed: 0,1,2,3,4,5,6,7,8,9
-      train_seed: 0,10,100,1000
+      experiment_config.seed: range(40)
   sweep:
     dir: log/${now:%Y-%m-%d}/${now:%H-%M-%S}/sac/${env_factory.task}
     subdir: ${short_dir:${hydra.job.override_dirname}, 3}

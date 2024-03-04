@@ -1,18 +1,22 @@
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass, field, asdict
+from typing import Sequence, Literal
 
 import numpy as np
 from joblib import Parallel, delayed
 
 from experiments.algo_eval.utils import shortener
 from experiments.exp_builders import SeededExperimentFactory
+from tianshou.highlevel.experiment import Experiment
 
 
 @dataclass
 class JoblibConfig:
     n_jobs: int = 1
-    backend: str = "loky"
+    backend: Literal["loky", "multiprocessing", "threading"] | None = None
     verbose: int = 10
+    return_as: Literal["list", "generator"] = "list"
+    prefer: Literal["processes", "threads"] | None = None
+    require: Literal["sharedmem"] | None = None
 
 
 @dataclass
@@ -37,21 +41,31 @@ class SeedVariabilityAnalysis:
         self.seed_config = seed_config
         self.seeded_experiment_factory = seeded_experiment_factory
 
-    def run_sequential(self):
-        results = []
-
+    def build_experiments(self):
         for policy_seed in self.seed_config.policy_seeds:
             for train_seed in self.seed_config.train_env_seeds:
                 for test_seed in self.seed_config.test_env_seeds:
                     experiment = self.seeded_experiment_factory.create_experiment(policy_seed, train_seed, test_seed)
                     full_name = f"policy_seed={policy_seed},train_seed={train_seed},test_seed={test_seed}"
                     experiment_name = shortener(full_name, 3)
-                    results.append(experiment.run(experiment_name))
+                    yield experiment_name, experiment
+
+    def run_sequential(self):
+        results = []
+
+        for experiment_name, experiment in self.build_experiments():
+            results.append(experiment.run(experiment_name))
 
     def run_joblib_local(self, joblib_config: JoblibConfig):
-        for experiment in self.build_experiments():
-            experiment_name = f"{self.env_factory.task}_seed_{experiment.config.seed}"  # TODO: based on subdir
-            Parallel(n_jobs=joblib_config.n_jobs)(delayed(experiment.run)(experiment_name) for _ in range(joblib_config.n_jobs))
+        results = Parallel(**asdict(joblib_config))(
+            delayed(self.execute_task)(exp, exp_name) for exp_name, exp in self.build_experiments())
+        return results
+
+    def execute_task(self, exp: Experiment, name: str):
+        try:
+            exp.run(name)
+        except Exception as e:
+            print(e)
 
     @staticmethod
     def eval_results(results: ExperimentResults):

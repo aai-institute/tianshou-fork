@@ -1,0 +1,24 @@
+hyperparameters:
+  experiment.policy_params.lr:
+    type: uniform_float
+    lower: 0.000001
+    upper: 0.01
+    log: true
+#  experiment.sampling_config.batch_size:
+#    type: categorical
+#    choices: [16, 32, 64, 128]
+  experiment.sampling_config.repeat_per_collect:
+    type: uniform_int
+    lower: 5
+    upper: 20
+    log: false
+  experiment.policy_params.gae_lambda:
+    type: uniform_float
+    lower: 0.8
+    upper: 0.9999
+    log: false
+#  experiment.policy_params.eps_clip:
+#    type: uniform_float
+#    lower: 0.0
+#    upper: 0.5
+#    log: false

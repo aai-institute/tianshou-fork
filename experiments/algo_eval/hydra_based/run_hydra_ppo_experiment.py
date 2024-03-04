@@ -24,22 +24,22 @@ OmegaConf.register_new_resolver("format", lambda inpt, formatter: formatter.form
 # cs.store(name="ppo_eval_config", group="eval_config", node=PPOEvalConfig)
 
 
-@hydra.main(version_base=None, config_path="../../configs", config_name="ppo_experiment_config")
+@hydra.main(version_base=None, config_path="configs", config_name="ppo_experiment_config")
 def run_exp(cfg: DictConfig):
     print(cfg)
     log_dir = HydraConfig.get().runtime.output_dir
     log_base_dir, experiment_name = os.path.split(log_dir)
     print(log_base_dir)
-    experiment_config = hydra.utils.instantiate(cfg.experiment_config,
+    experiment_config = hydra.utils.instantiate(cfg.experiment.experiment_config,
                                                 persistence_base_dir=log_base_dir,
                                                 # device=f"cuda:{HydraConfig.get().job.num % 4}"
                                                 )
-    sampling_config = hydra.utils.instantiate(cfg.sampling_config)
+    sampling_config = hydra.utils.instantiate(cfg.experiment.sampling_config)
 
     lr_scheduler = LRSchedulerFactoryLinear(sampling_config) if cfg.lr_decay else None
-    policy_params = hydra.utils.instantiate(cfg.policy_params,
+    policy_params = hydra.utils.instantiate(cfg.experiment.policy_params,
                                             lr_scheduler_factory=lr_scheduler)
-    env_factory = hydra.utils.instantiate(cfg.env_factory)
+    env_factory = hydra.utils.instantiate(cfg.experiment.env_factory)
 
     experiment = (
         PPOExperimentBuilder(env_factory, experiment_config, sampling_config)

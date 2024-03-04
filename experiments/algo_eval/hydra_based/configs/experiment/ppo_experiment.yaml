@@ -1,0 +1,9 @@
+defaults:
+  - experiment_config: hl_experiment_config
+  - env_factory: mujoco_env_factory
+  - sampling_config: ppo_sampling_config
+  - policy_params: ppo_params
+  - _self_
+
+_target_: experiments.exp_builders.ppo_exp_builder.PPOSeededExperimentFactory
+hidden_sizes: [64, 64]
