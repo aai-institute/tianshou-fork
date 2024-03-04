@@ -30,8 +30,8 @@ _NP_TO_CT = {
 class ShArray:
     """Wrapper of multiprocessing Array."""
 
-    def __init__(self, dtype: np.generic, shape: tuple[int]) -> None:
-        self.arr = Array(_NP_TO_CT[dtype.type], int(np.prod(shape)))  # type: ignore
+    def __init__(self, dtype: np.generic, shape: tuple[int], ctx: multiprocessing) -> None:
+        self.arr = ctx.Array(_NP_TO_CT[dtype.type], int(np.prod(shape)))  # type: ignore
         self.dtype = dtype
         self.shape = shape
 
@@ -46,14 +46,14 @@ class ShArray:
         return np.frombuffer(obj, dtype=self.dtype).reshape(self.shape)  # type: ignore
 
 
-def _setup_buf(space: gym.Space) -> dict | tuple | ShArray:
+def _setup_buf(space: gym.Space, ctx: multiprocessing) -> dict | tuple | ShArray:
     if isinstance(space, gym.spaces.Dict):
         assert isinstance(space.spaces, OrderedDict)
-        return {k: _setup_buf(v) for k, v in space.spaces.items()}
+        return {k: _setup_buf(v, ctx) for k, v in space.spaces.items()}
     if isinstance(space, gym.spaces.Tuple):
         assert isinstance(space.spaces, tuple)
-        return tuple([_setup_buf(t) for t in space.spaces])
-    return ShArray(space.dtype, space.shape)  # type: ignore
+        return tuple([_setup_buf(t, ctx) for t in space.spaces])
+    return ShArray(space.dtype, space.shape, ctx)  # type: ignore
 
 
 def _worker(
@@ -122,24 +122,25 @@ def _worker(
 class SubprocEnvWorker(EnvWorker):
     """Subprocess worker used in SubprocVectorEnv and ShmemVectorEnv."""
 
-    def __init__(self, env_fn: Callable[[], gym.Env], share_memory: bool = False,
+    def __init__(self, env_fn: Callable[[], gym.Env],
+                 share_memory: bool = False,
                  context: Literal['fork', 'spawn'] | None = None) -> None:
         self.parent_remote, self.child_remote = Pipe()
         self.share_memory = share_memory
         self.buffer: dict | tuple | ShArray | None = None
+        ctxt = multiprocessing.get_context(context)
         if self.share_memory:
             dummy = env_fn()
             obs_space = dummy.observation_space
             dummy.close()
             del dummy
-            self.buffer = _setup_buf(obs_space)
+            self.buffer = _setup_buf(obs_space, ctxt)
         args = (
             self.parent_remote,
             self.child_remote,
             CloudpickleWrapper(env_fn),
             self.buffer,
         )
-        ctxt = multiprocessing.get_context(context)
         self.process = ctxt.Process(target=_worker, args=args, daemon=True)
         self.process.start()
         self.child_remote.close()

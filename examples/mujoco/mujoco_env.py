@@ -1,5 +1,6 @@
 import logging
 import pickle
+from typing import Literal
 
 from tianshou.env import VectorEnvNormObs
 from tianshou.highlevel.env import (
@@ -65,11 +66,15 @@ class MujocoEnvObsRmsPersistence(Persistence):
 
 
 class MujocoEnvFactory(EnvFactoryRegistered):
-    def __init__(self, task: str, seed: int, obs_norm=True):
+    def __init__(self, task: str, seed: int, obs_norm=True,
+                 venv_type: VectorEnvType = VectorEnvType.SUBPROC_SHARED_MEM,
+                 venv_kwargs: dict | None = None,
+                 ):
         super().__init__(
             task=task,
             seed=seed,
-            venv_type=VectorEnvType.SUBPROC_SHARED_MEM,
+            venv_type=venv_type,
+            venv_kwargs=venv_kwargs,
             envpool_factory=EnvPoolFactory() if envpool_is_available else None,
         )
         self.obs_norm = obs_norm
