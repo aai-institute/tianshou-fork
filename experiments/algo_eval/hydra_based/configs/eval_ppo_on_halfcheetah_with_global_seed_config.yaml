@@ -2,71 +2,80 @@
 defaults:
   - override hydra/launcher: joblib
 
-env_factory:
-  _target_: examples.mujoco.mujoco_env.MujocoEnvFactory
-  task: HalfCheetah-v4
-  seed: 0
-  obs_norm: true
-  context: fork
-sampling_config:
-  _target_: tianshou.highlevel.config.SamplingConfig
-  step_per_collect: 2048
-  buffer_size: ${sampling_config.step_per_collect}
-  num_epochs: 100
-  step_per_epoch: 20480
-  batch_size: 64
-  num_train_envs: 64
-  train_seed: ${experiment_config.seed}
-  num_test_envs: 8
-  test_seed: 1337
-  episode_per_test: 32
-  sample_equal_from_each_env: true
-  repeat_per_collect: 10
-policy_params:
-  _target_: tianshou.highlevel.params.policy_params.PPOParams
-  action_bound_method: clip
-  action_scaling: default
-  deterministic_eval: true
-  discount_factor: 0.99
-  gae_lambda: 0.95
-  reward_normalization: true
-  ent_coef: 0.0
-  vf_coef: 0.25
-  max_grad_norm: 0.5
-  value_clip: false
-  advantage_normalization: false
-  eps_clip: 0.2
-  dual_clip: null
-  recompute_advantage: true
-  lr: 0.0003
-  lr_scheduler_factory: null
-  dist_fn:
-    _target_: tianshou.highlevel.params.dist_fn.DistributionFunctionFactoryIndependentGaussians
-experiment_config:
-  _target_: tianshou.highlevel.experiment.ExperimentConfig
-  seed: 0
-  watch: false
-  watch_render: 0.0
-  persistence_base_dir: ???
-logger_factory:
-  _target_: tianshou.highlevel.logger.LoggerManagerFactory
-  logger_types: ['tensorboard', 'pandas']
-  wandb_project: "ppo_halfcheetah"
+experiment:
+  env_factory:
+    _target_: examples.mujoco.mujoco_env.MujocoEnvFactory
+    task: HalfCheetah-v4
+    seed: 0
+    obs_norm: true
+    venv_kwargs:
+      context: fork
+  sampling_config:
+    _target_: tianshou.highlevel.config.SamplingConfig
+    step_per_collect: 2048
+    buffer_size: ${experiment.sampling_config.step_per_collect}
+    num_epochs: 100
+    step_per_epoch: 20480
+    batch_size: 64
+    num_train_envs: 64
+    train_seed: ${experiment.experiment_config.seed}
+    num_test_envs: 8
+    episode_per_test: 32
+    sample_equal_from_each_env: true
+    repeat_per_collect: 10
+  policy_params:
+    _target_: tianshou.highlevel.params.policy_params.PPOParams
+    action_bound_method: clip
+    action_scaling: default
+    deterministic_eval: true
+    discount_factor: 0.99
+    gae_lambda: 0.95
+    reward_normalization: true
+    ent_coef: 0.0
+    vf_coef: 0.25
+    max_grad_norm: 0.5
+    value_clip: false
+    advantage_normalization: false
+    eps_clip: 0.2
+    dual_clip: null
+    recompute_advantage: true
+    lr: 0.0003
+    lr_scheduler_factory: null
+    dist_fn:
+      _target_: tianshou.highlevel.params.dist_fn.DistributionFunctionFactoryIndependentGaussians
+  experiment_config:
+    _target_: tianshou.highlevel.experiment.ExperimentConfig
+    seed: 0
+    watch: false
+    watch_render: 0.0
+    persistence_base_dir: ???
+  logger_factory:
+    _target_: tianshou.highlevel.logger.LoggerManagerFactory
+    logger_types: ['tensorboard', 'pandas']
+    wandb_project: "ppo_halfcheetah"
 
-_target_: experiments.exp_builders.ppo_exp_builder.PPOSeededExperimentFactory
-hidden_sizes: [64, 64]
+  _target_: experiments.exp_builders.ppo_exp_builder.PPOSeededExperimentFactory
+  hidden_sizes: [64, 64]
+
+seed_config:
+  seeds: [0, 1, 2, 3, 4]
 
 hydra:
-  launcher:
-    n_jobs: 10
-  mode: MULTIRUN
-  sweeper:
-    params:
-      experiment_config.seed: range(40)
-#      sampling_config.train_seed: 0,10,100,1000
-#      sampling_config.test_seed: 0,1338
+  mode: RUN
+  run:
+    dir: log/${now:%y-%m-%d}/${now:%H-%M-%S}/ppo/${experiment.env_factory.task}
 
-
-  sweep:
-    dir: log/${now:%Y-%m-%d}/${now:%H-%M-%S}/ppo/${env_factory.task}
-    subdir: ${short_dir:${hydra.job.override_dirname}, 3}
+#hydra:
+#  launcher:
+#    n_jobs: 10
+#  mode: MULTIRUN
+#  sweeper:
+#    params:
+#      experiment_config.seed: range(40)
+##      sampling_config.train_seed: 0,10,100,1000
+##      sampling_config.test_seed: 0,1338
+#
+#
+#  sweep:
+#    dir: log/${now:%Y-%m-%d}/${now:%H-%M-%S}/ppo/${env_factory.task}
+#    subdir: ${short_dir:${hydra.job.override_dirname}, 3}

@@ -6,11 +6,18 @@ defaults:
 hidden_sizes: [64, 64]
 lr_decay: false
 
+seed_config:
+  seeds: [0, 1, 2, 3, 4]
+
 experiment:
   env_factory:
     task: "HalfCheetah-v4"
     venv_kwargs:
       context: fork
+  logger_factory:
+    _target_: tianshou.highlevel.logger.LoggerManagerFactory
+    logger_types: [ 'tensorboard', 'pandas' ]
+    wandb_project: hpo_ppo_pendulum
 
 hydra:
   mode: RUN

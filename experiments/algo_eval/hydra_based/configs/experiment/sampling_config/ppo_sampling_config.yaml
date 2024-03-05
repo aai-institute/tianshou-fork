@@ -7,7 +7,6 @@ batch_size: 64
 num_train_envs: 32
 train_seed: 0
 num_test_envs: 8
-test_seed: 1337
 episode_per_test: 32
 sample_equal_from_each_env: false
 repeat_per_collect: 10

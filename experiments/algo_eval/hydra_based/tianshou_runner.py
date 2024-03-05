@@ -15,7 +15,7 @@ OmegaConf.register_new_resolver("short_dir", shortener)
 OmegaConf.register_new_resolver("format", lambda inpt, formatter: formatter.format(inpt))
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="hpo_ppo_pendulum_config")
+@hydra.main(version_base=None, config_path="configs", config_name="ppo_experiment_config")
 def run_exp(cfg: DictConfig):
     print(cfg)
     log_dir = HydraConfig.get().runtime.output_dir

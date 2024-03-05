@@ -2,7 +2,8 @@ import os
 import pickle
 from abc import abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass
+from copy import copy
+from dataclasses import dataclass, asdict
 from pprint import pformat
 from typing import Self
 
@@ -339,6 +340,15 @@ class ExperimentBuilder:
         self._policy_wrapper_factory: PolicyWrapperFactory | None = None
         self._trainer_callbacks: TrainerCallbacks = TrainerCallbacks()
 
+    def with_sampling_config(self, sampling_config: SamplingConfig) -> Self:
+        """Allows to adjust the sampling configuration to use.
+
+        :param sampling_config: the sampling configuration
+        :return: the builder
+        """
+        self._sampling_config = sampling_config
+        return self
+
     def with_logger_factory(self, logger_factory: LoggerFactory) -> Self:
         """Allows to customize the logger factory to use.
 
@@ -430,6 +440,7 @@ class ExperimentBuilder:
 
         :return: the experiment
         """
+        # add check that seeds for train and test seeds do not overlap (also make sure that they are not the same)
         agent_factory = self._create_agent_factory()
         agent_factory.set_trainer_callbacks(self._trainer_callbacks)
         if self._policy_wrapper_factory:
@@ -442,6 +453,29 @@ class ExperimentBuilder:
             self._logger_factory,
         )
         return experiment
+
+    def build_default_seeded_experiments(self, num_experiments: int) -> list[Experiment]:
+        """Creates a list of experiments with non-overlapping train seeds, starting from the configured train seed."""
+
+        configured_sampling_config = copy(self._sampling_config)
+        configured_train_seed = configured_sampling_config.train_seed
+        num_train_envs = configured_sampling_config.num_train_envs
+
+        seeded_experiments = []
+        for i in range(num_experiments):
+            new_train_seed = i * num_train_envs + configured_train_seed + 1
+            new_sampling_config_dict = asdict(configured_sampling_config)
+            new_sampling_config_dict["train_seed"] = new_train_seed
+
+            seeded_exp_builder = self.with_sampling_config(SamplingConfig(**new_sampling_config_dict))
+            seeded_experiments.append(
+                seeded_exp_builder.build()
+            )
+        self.with_sampling_config(configured_sampling_config)  # restore original config
+        return seeded_experiments
+
+
+
 
 
 class _BuilderMixinActorFactory(ActorFutureProviderProtocol):
