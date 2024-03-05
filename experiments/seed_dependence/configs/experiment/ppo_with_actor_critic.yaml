@@ -1,8 +1,0 @@
-defaults:
-  - env_factory: mujoco_env_factory
-  - sampling_config: ppo_sampling_config
-  - policy_params: ppo_params
-  - experiment_config: ppo_experiment_config
-
-_target_: experiments.exp_builders.ppo_exp_builder.PPOWithDefaultActorAndDefaultCriticExperimentBuilder
-hidden_sizes: [64, 64]
