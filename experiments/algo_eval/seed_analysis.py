@@ -26,12 +26,13 @@ class ExperimentResults:
     env_steps: np.ndarray  # (n_epochs)
     score_thresholds: np.ndarray
 
+    def load_from_disk(self):
+        pass
+
 
 @dataclass
 class SeedConfiguration:
-    policy_seeds: Sequence[int] = field(default_factory=lambda: [0, 1, 2, 3, 4])
-    train_env_seeds: Sequence[int] | Sequence[Sequence[int]] = field(default_factory=lambda: [1000, 2000, 3000, 4000])
-    test_env_seeds: Sequence[int] | Sequence[Sequence[int]] = field(default_factory=lambda: [1337])
+    seeds: Sequence[int] = field(default_factory=lambda: [0, 1, 2, 3, 4])
 
 
 class SeedVariabilityAnalysis:
@@ -42,13 +43,11 @@ class SeedVariabilityAnalysis:
         self.seeded_experiment_factory = seeded_experiment_factory
 
     def build_experiments(self):
-        for policy_seed in self.seed_config.policy_seeds:
-            for train_seed in self.seed_config.train_env_seeds:
-                for test_seed in self.seed_config.test_env_seeds:
-                    experiment = self.seeded_experiment_factory.create_experiment(policy_seed, train_seed, test_seed)
-                    full_name = f"policy_seed={policy_seed},train_seed={train_seed},test_seed={test_seed}"
-                    experiment_name = shortener(full_name, 3)
-                    yield experiment_name, experiment
+        for policy_seed in self.seed_config.seeds:
+            experiment = self.seeded_experiment_factory.create_experiment(policy_seed)
+            full_name = f"seed={policy_seed}"
+            experiment_name = shortener(full_name, 3)
+            yield experiment_name, experiment
 
     def run_sequential(self):
         results = []

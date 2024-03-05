@@ -56,9 +56,7 @@ class PPOEvalConfig:
 if __name__ == "__main__":
 
     seed_config = SeedConfiguration(
-        policy_seeds=list(range(2)),
-        train_env_seeds=list(range(2)),
-        test_env_seeds=[1337],
+        seeds=list(range(2)),
     )
 
     experiment_config: ExperimentConfig = ExperimentConfig(
@@ -77,7 +75,6 @@ if __name__ == "__main__":
         num_train_envs=2,
         train_seed=0,
         num_test_envs=2,
-        test_seed=1337,
         episode_per_test=32,
         sample_equal_from_each_env=True,
         repeat_per_collect=10,
@@ -105,7 +102,7 @@ if __name__ == "__main__":
         task="HalfCheetah-v4",
         seed=0,
         obs_norm=True,
-        context='fork',
+        venv_kwargs={'context': 'fork'},
         # venv_type=VectorEnvType.DUMMY
     )
 
@@ -136,27 +133,26 @@ if __name__ == "__main__":
     results = seed_variability_analysis.run_joblib_local(joblib_config)
 
     test_episode_returns = []
-    for test_seed in seed_config.test_env_seeds:
-        for train_seed in seed_config.train_env_seeds:
-            for policy_seed in seed_config.policy_seeds:
-                full_name = f"policy_seed={policy_seed},train_seed={train_seed},test_seed={test_seed}"
-                experiment_name = shortener(full_name, 3)
-                log_dir = os.path.join(algo_config.log_dir, experiment_name)
-                print(log_dir)
 
-                logger = PandasLogger(log_dir, exclude_arrays=False)
-                logger.restore_data()
+    for seed in seed_config.seeds:
+        full_name = f"seed={seed}"
+        experiment_name = shortener(full_name, 3)
+        log_dir = os.path.join(algo_config.log_dir, experiment_name)
+        print(log_dir)
 
-                train_data = logger.data['train']
-                test_data = logger.data['test']
+        logger = PandasLogger(log_dir, exclude_arrays=False)
+        logger.restore_data()
 
-                test_episode_returns.append([d['returns_stat']['mean'] for d in test_data])
+        train_data = logger.data['train']
+        test_data = logger.data['test']
 
-            results = ExperimentResults(algorithms=['PPO'],
-                                        score_dict={'PPO': np.array(test_episode_returns)},
-                                        env_steps=np.array([d['env_step'] for d in test_data]),
-                                        score_thresholds=np.linspace(0.0, 8000.0, 81))
+        test_episode_returns.append([d['returns_stat']['mean'] for d in test_data])
 
-            seed_variability_analysis.eval_results(results)
+    results = ExperimentResults(algorithms=['PPO'],
+                                score_dict={'PPO': np.array(test_episode_returns)},
+                                env_steps=np.array([d['env_step'] for d in test_data]),
+                                score_thresholds=np.linspace(0.0, 8000.0, 81))
+
+    seed_variability_analysis.eval_results(results)
 
     print()

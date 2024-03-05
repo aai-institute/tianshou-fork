@@ -13,17 +13,10 @@ from tianshou.utils.logger.pandas_logger import PandasLogger
 
 
 def get_exp_dir(seed_config):
-    if seed_config.train_env_seeds:
-        for policy_seed in seed_config.policy_seeds:
-            for train_seed in seed_config.train_env_seeds:
-                full_name = f"seed={policy_seed},train_seed={train_seed}"
-                experiment_name = shortener(full_name, 3)
-                yield experiment_name
-    else:
-        for policy_seed in seed_config.policy_seeds:
-            full_name = f"seed={policy_seed}"
-            experiment_name = shortener(full_name, 3)
-            yield experiment_name
+    for policy_seed in seed_config.seeds:
+        full_name = f"seed={policy_seed}"
+        experiment_name = shortener(full_name, 3)
+        yield experiment_name
 
 
 def load_exp(log_dir_base, seed_config):
@@ -96,17 +89,13 @@ if __name__ == "__main__":
     # custom path to the experiment directory
     exp_dir = "/private/tmp/log/2024-02-20/13-00-20/ppo/HalfCheetah-v4/"
     seed_config = SeedConfiguration(
-        policy_seeds=list(range(10)),
-        train_env_seeds=[0, 10, 100, 1000],
-        test_env_seeds=[1337],
+        seeds=list(range(10)),
     )
     ppo_results = load_exp(exp_dir, seed_config)
 
     exp_dir = "/private/tmp/log/2024-02-24/15-35-26/ppo/HalfCheetah-v4/"
     seed_config = SeedConfiguration(
-        policy_seeds=list(range(40)),
-        train_env_seeds=[],
-        test_env_seeds=[1337],
+        seeds=list(range(40)),
     )
     ppo_results_global_seed = load_exp(exp_dir, seed_config)
 
