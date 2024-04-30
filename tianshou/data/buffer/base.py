@@ -1,17 +1,22 @@
-from typing import Any, Self, TypeVar, cast
+from typing import Any, Self, TypeVar, cast, override
 
 import h5py
 import numpy as np
 
 from tianshou.data import Batch
-from tianshou.data.batch import alloc_by_keys_diff, create_value
+from tianshou.data.batch import (
+    BatchProtocol,
+    IndexType,
+    alloc_by_keys_diff,
+    create_value,
+)
 from tianshou.data.types import RolloutBatchProtocol
 from tianshou.data.utils.converter import from_hdf5, to_hdf5
 
 TBuffer = TypeVar("TBuffer", bound="ReplayBuffer")
 
 
-class ReplayBuffer:
+class ReplayBuffer(BatchProtocol):
     """:class:`~tianshou.data.ReplayBuffer` stores data generated from interaction between the policy and environment.
 
     ReplayBuffer can be considered as a specialized form (or management) of Batch. It
@@ -56,6 +61,8 @@ class ReplayBuffer:
         self,
         size: int,
         stack_num: int = 1,
+        # TODO: very confusing, should be clear when one would ever want to set this to True
+        #   Also complicates downstream code
         ignore_obs_next: bool = False,
         save_only_last_obs: bool = False,
         sample_avail: bool = False,
@@ -154,11 +161,14 @@ class ReplayBuffer:
 
     def reset(self, keep_statistics: bool = False) -> None:
         """Clear all the data in replay buffer and episode statistics."""
+        # TODO: don't set new attributes outside of __init__!
         self.last_index = np.array([0])
         self._index = self._size = 0
         if not keep_statistics:
             self._ep_rew, self._ep_len, self._ep_idx = 0.0, 0, 0
 
+    # TODO: is this method really necessary? It's kinda dangerous, can accidentally
+    #  remove all references to collected data
     def set_batch(self, batch: RolloutBatchProtocol) -> None:
         """Manually choose the batch you want the ReplayBuffer to manage."""
         assert len(batch) == self.maxsize and set(batch.keys()).issubset(
@@ -380,7 +390,8 @@ class ReplayBuffer:
                 raise exception  # val != Batch()
             return Batch()
 
-    def __getitem__(self, index: slice | int | list[int] | np.ndarray) -> RolloutBatchProtocol:
+    @override
+    def __getitem__(self, index: IndexType) -> RolloutBatchProtocol:
         """Return a data batch: self[index].
 
         If stack_num is larger than 1, return the stacked obs and obs_next with shape
@@ -402,6 +413,7 @@ class ReplayBuffer:
             obs_next = self.get(indices, "obs_next", Batch())
         else:
             obs_next = self.get(self.next(indices), "obs", Batch())
+        # TODO: don't do this
         batch_dict = {
             "obs": obs,
             "act": self.act[indices],
@@ -414,7 +426,9 @@ class ReplayBuffer:
             # TODO: what's the use of this key?
             "policy": self.get(indices, "policy", Batch()),
         }
-        for key in self._meta.__dict__:
-            if key not in self._input_keys:
-                batch_dict[key] = self._meta[key][indices]
+        # TODO: don't do this, reduce complexity. Why such a big difference between what is returned
+        #   and sub-batches of self._meta?
+        missing_keys = set(self._meta.get_keys()) - set(self._input_keys)
+        for key in missing_keys:
+            batch_dict[key] = self._meta[key][indices]
         return cast(RolloutBatchProtocol, Batch(batch_dict))

@@ -432,7 +432,7 @@ class BatchProtocol(Protocol):
         self,
         seq: np.ndarray,
         key: str,
-        index: Sequence[int] | None = None,
+        index: IndexType | None = None,
         default_value: float | None = None,
     ) -> None:
         """Set a sequence of values at a given key.
