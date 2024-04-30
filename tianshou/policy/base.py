@@ -710,6 +710,23 @@ def _gae_return(
 
 
 @njit
+def episode_mc_return(rewards: np.ndarray, gamma: float) -> np.ndarray:
+    """Calculate discounted monte-carlo returns to go from rewards of a single episode.
+
+    :param rewards: rewards of a single episode
+    :param gamma: discount factor
+    :return: a numpy array of shape (len(rewards), ).
+    """
+    len_episode = len(rewards)
+    ret2go = np.zeros(len_episode)
+    ret2go[-1] = rewards[-1]
+
+    for j in range(len_episode - 2, -1, -1):
+        ret2go[j] = rewards[j] + gamma * ret2go[j + 1]
+    return ret2go
+
+
+@njit
 def _nstep_return(
     rew: np.ndarray,
     end_flag: np.ndarray,
