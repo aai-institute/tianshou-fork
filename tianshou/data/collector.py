@@ -2,9 +2,10 @@ import logging
 import time
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from copy import copy
 from dataclasses import dataclass
-from typing import Any, Self, TypeVar, cast
+from typing import Any, Protocol, Self, TypeVar, cast
 
 import gymnasium as gym
 import numpy as np
@@ -26,6 +27,7 @@ from tianshou.data.types import (
 )
 from tianshou.env import BaseVectorEnv, DummyVectorEnv
 from tianshou.policy import BasePolicy
+from tianshou.policy.base import episode_mc_return
 from tianshou.utils.print import DataclassPPrintMixin
 from tianshou.utils.torch_utils import in_eval_mode, in_train_mode
 
@@ -125,6 +127,52 @@ def _HACKY_create_info_batch(info_array: np.ndarray) -> Batch:
     result_batch_parent = Batch(info=info_array)
     result_batch_parent.info[falsy_info_indices] = {}
     return result_batch_parent.info
+
+
+class RolloutHookProtocol(Protocol):
+    """A protocol for rollout hooks."""
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
+        """The function to call when the hook is executed."""
+        ...
+
+
+class RolloutHook(RolloutHookProtocol, ABC):
+    @abstractmethod
+    def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
+        ...
+
+
+class CombinedRolloutHook(RolloutHook):
+    def __init__(self, *rollout_hooks: RolloutHookProtocol):
+        self.rollout_hooks = rollout_hooks
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
+        result = {}
+        for rollout_hook in self.rollout_hooks:
+            new_entries_dict = rollout_hook(rollout_batch)
+            if duplicated_entries := set(new_entries_dict).difference(result):
+                raise RuntimeError(
+                    f"Combined rollout hook lead to previously "
+                    f"computed entries that would be overwritten: {duplicated_entries=}. "
+                    f"Consider combining only hooks which will deliver non-overlapping entries to solve this.",
+                )
+            result.update(new_entries_dict)
+        return result
+
+
+class EpisodeRolloutHook(RolloutHook, ABC):
+    """Marker interface, hooks that operate on an rollout of a single episode should inherit from this."""
+
+
+class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
+    BATCH_KEY = "return_to_go"
+
+    def __init__(self, gamma: float):
+        self.gamma = gamma
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
+        return {self.BATCH_KEY: episode_mc_return(rollout_batch.rew, self.gamma)}
 
 
 class BaseCollector(ABC):
@@ -361,6 +409,9 @@ class Collector(BaseCollector):
         env: gym.Env | BaseVectorEnv,
         buffer: ReplayBuffer | None = None,
         exploration_noise: bool = False,
+        on_episode_done_hook: EpisodeRolloutHook
+        | Callable[[RolloutBatchProtocol], dict[str, np.ndarray]]
+        | None = None,
     ) -> None:
         """:param policy: an instance of the :class:`~tianshou.policy.BasePolicy` class.
         :param env: a ``gym.Env`` environment or an instance of the
@@ -372,6 +423,18 @@ class Collector(BaseCollector):
             with the corresponding policy's exploration noise. If so, "policy.
             exploration_noise(act, batch)" will be called automatically to add the
             exploration noise into action. Default to False.
+        :param on_episode_done_hook: if passed, will be executed when an episode is done.
+            The input to the hook will be a `RolloutBatch` that contains the entire episode (and nothing else).
+            The dict returned by the hook will be used to add new entries to the buffer
+            for the episode that just ended. The hook should return arrays with floats
+            which should be of the same length as the input rollout batch.
+            If you have multiple hooks, you can use the `CombinedRolloutHook` class to combine them.
+            A typical example of a hook is the `EpisodeRolloutHookMCReturn` which adds the Monte Carlo return
+            as a field to the buffer.
+
+            Care must be taken when using such hook, as for unfinished episodes one can easily end
+            up with NaNs in the buffer. It is recommended to use the hooks only with the `n_episode` option
+            in `collect`, or to strip the buffer of NaNs after the collection.
         """
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
         self._pre_collect_obs_RO: np.ndarray | None = None
@@ -379,12 +442,28 @@ class Collector(BaseCollector):
         self._pre_collect_hidden_state_RH: np.ndarray | torch.Tensor | Batch | None = None
 
         self._is_closed = False
+        self.on_episode_done_hook = on_episode_done_hook
         self.collect_step, self.collect_episode, self.collect_time = 0, 0, 0.0
 
     def close(self) -> None:
         super().close()
         self._pre_collect_obs_RO = None
         self._pre_collect_info_R = None
+
+    def run_on_episode_done(
+        self,
+        episode_batch: RolloutBatchProtocol,
+    ) -> dict[str, np.ndarray] | None:
+        """Executes the `on_episode_done_hook` that was passed on init.
+
+        The raison d'être of this method is to allow for a cleaner implementation
+        of the hook for users who want to subclass the Collector. These users can
+        then override this method and also override the init to no longer accept
+        the `on_episode_done_hook` provider.
+        """
+        if self.on_episode_done_hook is not None:
+            return self.on_episode_done_hook(episode_batch)
+        return None
 
     def reset_env(
         self,
@@ -597,6 +676,22 @@ class Collector(BaseCollector):
                 #  this complex logic
                 self._reset_hidden_state_based_on_type(env_ind_local_D, last_hidden_state_RH)
 
+                for local_done_idx in env_ind_local_D:
+                    cur_ep_index_slice = slice(
+                        ep_idx_R[local_done_idx],
+                        ptr_R[local_done_idx],
+                    )
+
+                    ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_slice])
+                    episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
+                    if episode_hook_additions is not None:
+                        for key, arr in episode_hook_additions:
+                            self.buffer.set_array_at_key(
+                                key,
+                                arr,
+                                index=cur_ep_index_slice,
+                            )
+
                 # preparing for the next iteration
                 last_obs_RO[env_ind_local_D] = obs_reset_DO
                 last_info_R[env_ind_local_D] = info_reset_D
@@ -654,6 +749,11 @@ class Collector(BaseCollector):
         elif n_episode:
             # reset envs and the _pre_collect fields
             self.reset_env(gym_reset_kwargs)  # todo still necessary?
+
+        if self.buffer.hasnull():
+            raise RuntimeError(
+                "NaN detected in the buffer. You can drop them with `buffer.dropnull()`.",
+            )
 
         return CollectStats.with_autogenerated_stats(
             returns=np.array(episode_returns),
