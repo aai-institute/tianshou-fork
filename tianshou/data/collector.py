@@ -685,10 +685,10 @@ class Collector(BaseCollector):
                     ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_slice])
                     episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
                     if episode_hook_additions is not None:
-                        for key, arr in episode_hook_additions:
+                        for key, array in episode_hook_additions.items():
                             self.buffer.set_array_at_key(
+                                array,
                                 key,
-                                arr,
                                 index=cur_ep_index_slice,
                             )
 
