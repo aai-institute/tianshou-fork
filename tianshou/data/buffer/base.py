@@ -1,11 +1,11 @@
-from typing import Any, Self, TypeVar, cast, override
+from typing import Any, Self, TypeVar, cast
 
 import h5py
 import numpy as np
+from overrides import override
 
 from tianshou.data import Batch
 from tianshou.data.batch import (
-    BatchProtocol,
     IndexType,
     alloc_by_keys_diff,
     create_value,
@@ -16,7 +16,7 @@ from tianshou.data.utils.converter import from_hdf5, to_hdf5
 TBuffer = TypeVar("TBuffer", bound="ReplayBuffer")
 
 
-class ReplayBuffer(BatchProtocol):
+class ReplayBuffer(RolloutBatchProtocol):
     """:class:`~tianshou.data.ReplayBuffer` stores data generated from interaction between the policy and environment.
 
     ReplayBuffer can be considered as a specialized form (or management) of Batch. It
