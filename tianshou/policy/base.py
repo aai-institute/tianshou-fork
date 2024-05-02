@@ -728,26 +728,30 @@ def episode_mc_return(rewards: np.ndarray, gamma: float) -> np.ndarray:
 
 @njit
 def _nstep_return(
-    rew: np.ndarray,
-    end_flag: np.ndarray,
-    target_q: np.ndarray,
-    indices: np.ndarray,
+    rew_B: np.ndarray,
+    end_flag_B: np.ndarray,
+    target_q_I: np.ndarray,
+    indices_I: np.ndarray,
     gamma: float,
     n_step: int,
 ) -> np.ndarray:
+    """Let I denote the amount of indices
+    Let B denote the size of the replay buffer
+    Let N denote the n in n-step returns.
+    """
     gamma_buffer = np.ones(n_step + 1)
     for i in range(1, n_step + 1):
         gamma_buffer[i] = gamma_buffer[i - 1] * gamma
-    target_shape = target_q.shape
+    target_shape = target_q_I.shape
     bsz = target_shape[0]
     # change target_q to 2d array
-    target_q = target_q.reshape(bsz, -1)
-    returns = np.zeros(target_q.shape)
-    gammas = np.full(indices[0].shape, n_step)
+    target_q = target_q_I.reshape(bsz, -1)
+    returns = np.zeros(target_q_I.shape)
+    gammas = np.full(indices_I[0].shape, n_step)
     for n in range(n_step - 1, -1, -1):
-        now = indices[n]
-        gammas[end_flag[now] > 0] = n + 1
-        returns[end_flag[now] > 0] = 0.0
-        returns = rew[now].reshape(bsz, 1) + gamma * returns
-    target_q = target_q * gamma_buffer[gammas].reshape(bsz, 1) + returns
-    return target_q.reshape(target_shape)
+        now = indices_I[n]
+        gammas[end_flag_B[now] > 0] = n + 1
+        returns[end_flag_B[now] > 0] = 0.0
+        returns = rew_B[now].reshape(bsz, 1) + gamma * returns
+    target_q_I = target_q * gamma_buffer[gammas].reshape(bsz, 1) + returns
+    return target_q_I.reshape(target_shape)
