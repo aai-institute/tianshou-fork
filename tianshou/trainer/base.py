@@ -430,6 +430,9 @@ class BaseTrainer(ABC):
             n_episode=self.episode_per_collect,
         )
 
+        if self.train_collector.buffer.hasnull():
+            raise RuntimeError("Malformed buffer!")
+
         self.env_step += result.n_collected_steps
 
         if result.n_collected_episodes > 0:

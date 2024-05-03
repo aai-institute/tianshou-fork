@@ -166,7 +166,7 @@ class EpisodeRolloutHook(RolloutHook, ABC):
 
 
 class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
-    BATCH_KEY = "return_to_go"
+    BATCH_KEY = "mc_return"
 
     def __init__(self, gamma: float):
         self.gamma = gamma
