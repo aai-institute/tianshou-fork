@@ -25,8 +25,9 @@ from tianshou.highlevel.agent import (
     PPOAgentFactory,
     REDQAgentFactory,
     SACAgentFactory,
+    SIALSACAgentFactory,
     TD3AgentFactory,
-    TRPOAgentFactory, SIALSACAgentFactory,
+    TRPOAgentFactory,
 )
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import EnvFactory
@@ -64,8 +65,9 @@ from tianshou.highlevel.params.policy_params import (
     PPOParams,
     REDQParams,
     SACParams,
+    SIALSACParams,
     TD3Params,
-    TRPOParams, SIALSACParams,
+    TRPOParams,
 )
 from tianshou.highlevel.params.policy_wrapper import PolicyWrapperFactory
 from tianshou.highlevel.persistence import (
@@ -1169,6 +1171,7 @@ class SACExperimentBuilder(
             self._get_critic_factory(1),
             self._get_optim_factory(),
         )
+
 
 class SIALSACExperimentBuilder(
     ExperimentBuilder,

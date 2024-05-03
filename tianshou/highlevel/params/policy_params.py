@@ -514,6 +514,7 @@ class SACParams(_SACParams, ParamsMixinExplorationNoise, ParamsMixinActionScalin
         transformers.extend(ParamsMixinActionScaling._get_param_transformers(self))
         return transformers
 
+
 @dataclass
 class _SIALSACParams(_SACParams, ParamsMixinExplorationNoise, ParamsMixinActionScaling):
     sial_alpha: float = 0.9
@@ -523,6 +524,7 @@ class _SIALSACParams(_SACParams, ParamsMixinExplorationNoise, ParamsMixinActionS
     """
     whether to use deterministic action (mean of Gaussian policy) in evaluation mode instead of stochastic
     action sampled by the policy. Does not affect training."""
+
     def _get_param_transformers(self) -> list[ParamTransformer]:
         transformers = super()._get_param_transformers()
         transformers.extend(ParamsMixinActorAndDualCritics._get_param_transformers(self))
@@ -530,15 +532,16 @@ class _SIALSACParams(_SACParams, ParamsMixinExplorationNoise, ParamsMixinActionS
         return transformers
 
 
-
 @dataclass
 class SIALSACParams(_SIALSACParams, ParamsMixinExplorationNoise, ParamsMixinActionScaling):
     deterministic_eval: bool = True
+
     def _get_param_transformers(self) -> list[ParamTransformer]:
         transformers = super()._get_param_transformers()
         transformers.extend(ParamsMixinExplorationNoise._get_param_transformers(self))
         transformers.extend(ParamsMixinActionScaling._get_param_transformers(self))
         return transformers
+
 
 @dataclass
 class DiscreteSACParams(_SACParams):
