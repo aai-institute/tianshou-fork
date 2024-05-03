@@ -28,11 +28,11 @@ class ReplayBuffer(RolloutBatchProtocol):
     :param size: the maximum size of replay buffer.
     :param stack_num: the frame-stack sampling argument, should be greater than or
         equal to 1. Default to 1 (no stacking).
-    :param ignore_obs_next: whether to not store obs_next. Default to False.
+    :param ignore_obs_next: whether to not store obs_next.
     :param save_only_last_obs: only save the last obs/obs_next when it has a shape
-        of (timestep, ...) because of temporal stacking. Default to False.
-    :param sample_avail: the parameter indicating sampling only available index
-        when using frame-stack sampling method. Default to False.
+        of (timestep, ...) because of temporal stacking.
+    :param sample_avail: whether to sample only available indices
+        when using the frame-stack sampling method.
     """
 
     _reserved_keys = (
@@ -68,6 +68,7 @@ class ReplayBuffer(RolloutBatchProtocol):
         sample_avail: bool = False,
         **kwargs: Any,  # otherwise PrioritizedVectorReplayBuffer will cause TypeError
     ) -> None:
+        # TODO: wtf, why do we need this? Too tired, check later
         self.options: dict[str, Any] = {
             "stack_num": stack_num,
             "ignore_obs_next": ignore_obs_next,
@@ -79,6 +80,7 @@ class ReplayBuffer(RolloutBatchProtocol):
         assert stack_num > 0, "stack_num should be greater than 0"
         self.stack_num = stack_num
         self._indices = np.arange(size)
+        # TODO: remove double negation and different name
         self._save_obs_next = not ignore_obs_next
         self._save_only_last_obs = save_only_last_obs
         self._sample_avail = sample_avail
@@ -87,30 +89,22 @@ class ReplayBuffer(RolloutBatchProtocol):
         self.reset()
 
     def __len__(self) -> int:
-        """Return len(self)."""
         return self._size
 
     def __repr__(self) -> str:
-        """Return str(self)."""
-        return self.__class__.__name__ + self._meta.__repr__()[5:]
+        wrapped_batch_repr = self._meta.__repr__()[len(self._meta.__class__.__name__) :]
+        return self.__class__.__name__ + wrapped_batch_repr
 
-    def __getattr__(self, key: str) -> Any:
-        """Return self.key."""
+    def __getattr__(self, item):
         try:
-            return self._meta[key]
-        except KeyError as exception:
-            raise AttributeError from exception
+            return self._meta[item]
+        except KeyError as e:
+            raise AttributeError from e
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        """Unpickling interface.
-
-        We need it because pickling buffer does not work out-of-the-box
-        ("buffer.__getattr__" is customized).
-        """
         self.__dict__.update(state)
 
     def __setattr__(self, key: str, value: Any) -> None:
-        """Set self.key = value."""
         assert key not in self._reserved_keys, f"key '{key}' is reserved and cannot be assigned"
         super().__setattr__(key, value)
 
@@ -359,7 +353,7 @@ class ReplayBuffer(RolloutBatchProtocol):
         stacked result as ``[obs[t-3], obs[t-2], obs[t-1], obs[t]]``.
 
         :param index: the index for getting stacked data.
-        :param str key: the key to get, should be one of the reserved_keys.
+        :param key: the key to get, should be one of the reserved_keys.
         :param default_value: if the given key's data is not found and default_value is
             set, return this default_value.
         :param stack_num: Default to self.stack_num.
@@ -412,7 +406,8 @@ class ReplayBuffer(RolloutBatchProtocol):
         if self._save_obs_next:
             obs_next = self.get(indices, "obs_next", Batch())
         else:
-            obs_next = self.get(self.next(indices), "obs", Batch())
+            obs_next_indices = self.next(indices)
+            obs_next = self.get(obs_next_indices, "obs", Batch())
         # TODO: don't do this
         batch_dict = {
             "obs": obs,
@@ -432,3 +427,28 @@ class ReplayBuffer(RolloutBatchProtocol):
         for key in missing_keys:
             batch_dict[key] = self._meta[key][indices]
         return cast(RolloutBatchProtocol, Batch(batch_dict))
+
+    def set_array_at_key(
+        self,
+        seq: np.ndarray,
+        key: str,
+        index: IndexType | None = None,
+        default_value: float | None = None,
+    ) -> None:
+
+        self._meta.set_array_at_key(seq, key, index, default_value)
+
+    def hasnull(self) -> bool:
+        return self._meta.hasnull()
+
+    def dropnull(self) -> None:
+        # raise NotImplemented()
+        self._meta = self._meta.dropnull()
+        self._size = len(self._meta)
+        self._index = len(self._meta)
+
+    #
+    # def drop_unfinished(self):
+    #     unfinished_index = self.unfinished_index()
+    #     full_index = np.arange(0, len(self))
+    #     raise NotImplementedError

@@ -1380,3 +1380,32 @@ def test_custom_key() -> None:
         ):
             assert batch.__dict__[key].is_empty()
             assert sampled_batch.__dict__[key].is_empty()
+
+
+def test_buffer_getattr_is_forwarded():
+    size = 10
+    buf = ReplayBuffer(size, ignore_obs_next=True)
+    for i in range(4):
+        buf.add(
+            Batch(
+                obs={
+                    "mask1": i + 1,
+                    "mask2": i + 4,
+                    "mask": i,
+                },
+                act={"act_id": i, "position_id": i + 3},
+                rew=i,
+                terminated=i % 3 == 0,
+                truncated=False,
+                info={"if": i},
+            ),
+        )
+
+    assert len(buf[:3]) == 3
+
+    buf.set_array_at_key(np.array([1, 2, 3], float), "newkey", [0, 1, 2])
+    assert np.array_equal(buf.newkey[:3], np.array([1, 2, 3], float))
+    assert buf.hasnull()
+    buf.dropnull()
+    assert len(buf[:3]) == 3
+    assert not buf.hasnull()

@@ -201,6 +201,10 @@ def alloc_by_keys_diff(
             meta[key] = create_value(batch[key], size, stack)
 
 
+class ProtocolCalledException(Exception):
+    pass
+
+
 # Note: This is implemented as a protocol because the interface
 # of Batch is always extended by adding new fields. Having a hierarchy of
 # protocols building off this one allows for type safety and IDE support despite
@@ -219,54 +223,54 @@ class BatchProtocol(Protocol):
 
     @property
     def shape(self) -> list[int]:
-        ...
+        raise ProtocolCalledException
 
     @overload
     def __getitem__(self, index: str) -> Any:
-        ...
+        raise ProtocolCalledException
 
     @overload
     def __getitem__(self, index: IndexType) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __getitem__(self, index: str | IndexType) -> Any:
-        ...
+        raise ProtocolCalledException
 
     def __setitem__(self, index: str | IndexType, value: Any) -> None:
-        ...
+        raise ProtocolCalledException
 
     def __iadd__(self, other: Self | Number | np.number) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __add__(self, other: Self | Number | np.number) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __imul__(self, value: Number | np.number) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __mul__(self, value: Number | np.number) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __itruediv__(self, value: Number | np.number) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __truediv__(self, value: Number | np.number) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __repr__(self) -> str:
-        ...
+        raise ProtocolCalledException
 
     def __eq__(self, other: Any) -> bool:
-        ...
+        raise ProtocolCalledException
 
     @staticmethod
     def to_numpy(batch: TBatch) -> TBatch:
         """Change all torch.Tensor to numpy.ndarray and return a new Batch."""
-        ...
+        raise ProtocolCalledException
 
     def to_numpy_(self) -> None:
         """Change all torch.Tensor to numpy.ndarray in-place."""
-        ...
+        raise ProtocolCalledException
 
     @staticmethod
     def to_torch(
@@ -275,7 +279,7 @@ class BatchProtocol(Protocol):
         device: str | int | torch.device = "cpu",
     ) -> TBatch:
         """Change all numpy.ndarray to torch.Tensor and return a new Batch."""
-        ...
+        raise ProtocolCalledException
 
     def to_torch_(
         self,
@@ -283,11 +287,11 @@ class BatchProtocol(Protocol):
         device: str | int | torch.device = "cpu",
     ) -> None:
         """Change all numpy.ndarray to torch.Tensor in-place."""
-        ...
+        raise ProtocolCalledException
 
     def cat_(self, batches: Self | Sequence[dict | Self]) -> None:
         """Concatenate a list of (or one) Batch objects into current batch."""
-        ...
+        raise ProtocolCalledException
 
     @staticmethod
     def cat(batches: Sequence[dict | TBatch]) -> TBatch:
@@ -307,11 +311,11 @@ class BatchProtocol(Protocol):
             >>> c.common.c.shape
             (7, 5)
         """
-        ...
+        raise ProtocolCalledException
 
     def stack_(self, batches: Sequence[dict | Self], axis: int = 0) -> None:
         """Stack a list of Batch object into current batch."""
-        ...
+        raise ProtocolCalledException
 
     @staticmethod
     def stack(batches: Sequence[dict | TBatch], axis: int = 0) -> TBatch:
@@ -336,7 +340,7 @@ class BatchProtocol(Protocol):
             If there are keys that are not shared across all batches, ``stack``
             with ``axis != 0`` is undefined, and will cause an exception.
         """
-        ...
+        raise ProtocolCalledException
 
     def empty_(self, index: slice | IndexType | None = None) -> Self:
         """Return an empty Batch object with 0 or None filled.
@@ -363,7 +367,7 @@ class BatchProtocol(Protocol):
                    ),
             )
         """
-        ...
+        raise ProtocolCalledException
 
     @staticmethod
     def empty(batch: TBatch, index: IndexType | None = None) -> TBatch:
@@ -371,17 +375,17 @@ class BatchProtocol(Protocol):
 
         The shape is the same as the given Batch.
         """
-        ...
+        raise ProtocolCalledException
 
     def update(self, batch: dict | Self | None = None, **kwargs: Any) -> None:
         """Update this batch from another dict/Batch."""
-        ...
+        raise ProtocolCalledException
 
     def __len__(self) -> int:
-        ...
+        raise ProtocolCalledException
 
     def is_empty(self, recurse: bool = False) -> bool:
-        ...
+        raise ProtocolCalledException
 
     def split(
         self,
@@ -399,16 +403,16 @@ class BatchProtocol(Protocol):
         :param merge_last: merge the last batch into the previous one.
             Default to False.
         """
-        ...
+        raise ProtocolCalledException
 
     def to_dict(self, recurse: bool = True) -> dict[str, Any]:
-        ...
+        raise ProtocolCalledException
 
     def to_list_of_dicts(self) -> list[dict[str, Any]]:
-        ...
+        raise ProtocolCalledException
 
     def get_keys(self) -> KeysView:
-        ...
+        raise ProtocolCalledException
 
     def set_array_at_key(
         self,
@@ -430,15 +434,15 @@ class BatchProtocol(Protocol):
             Note that the array at the key will be of the same dtype as the passed sequence,
             so default value should be such that numpy can cast it to this dtype.
         """
-        ...
+        raise ProtocolCalledException
 
     def isnull(self) -> Self:
         """Return a boolean mask of the same shape, indicating missing values."""
-        ...
+        raise ProtocolCalledException
 
     def hasnull(self) -> bool:
         """Return whether the batch has missing values."""
-        ...
+        raise ProtocolCalledException
 
     def dropnull(self) -> Self:
         """Return a batch where all items in which any value is null are dropped.
@@ -457,7 +461,7 @@ class BatchProtocol(Protocol):
         the same as if the batch was flattened, entries were dropped,
         and then the batch was reshaped back to the original nested structure.
         """
-        ...
+        raise ProtocolCalledException
 
     def apply_array_func(
         self,
@@ -470,7 +474,7 @@ class BatchProtocol(Protocol):
         :param inplace: whether to apply the function in-place. If False, a new batch is returned,
             otherwise the batch is modified in-place and None is returned.
         """
-        ...
+        raise ProtocolCalledException
 
 
 class Batch(BatchProtocol):
@@ -552,11 +556,11 @@ class Batch(BatchProtocol):
 
     @overload
     def __getitem__(self, index: str) -> Any:
-        ...
+        raise ProtocolCalledException
 
     @overload
     def __getitem__(self, index: IndexType) -> Self:
-        ...
+        raise ProtocolCalledException
 
     def __getitem__(self, index: str | IndexType) -> Any:
         """Return self[index]."""

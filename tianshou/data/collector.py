@@ -166,7 +166,7 @@ class EpisodeRolloutHook(RolloutHook, ABC):
 
 
 class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
-    BATCH_KEY = "return_to_go"
+    BATCH_KEY = "mc_return"
 
     def __init__(self, gamma: float):
         self.gamma = gamma
@@ -685,9 +685,9 @@ class Collector(BaseCollector):
                     ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_slice])
                     episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
                     if episode_hook_additions is not None:
-                        for key, arr in episode_hook_additions.items():
+                        for key, array in episode_hook_additions.items():
                             self.buffer.set_array_at_key(
-                                arr,
+                                array,
                                 key,
                                 index=cur_ep_index_slice,
                             )

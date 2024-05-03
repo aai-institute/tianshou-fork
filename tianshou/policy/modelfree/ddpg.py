@@ -145,7 +145,7 @@ class DDPGPolicy(BasePolicy[TDDPGTrainingStats], Generic[TDDPGTrainingStats]):
         batch: RolloutBatchProtocol,
         buffer: ReplayBuffer,
         indices: np.ndarray,
-    ) -> RolloutBatchProtocol | BatchWithReturnsProtocol:
+    ) -> BatchWithReturnsProtocol:
         return self.compute_nstep_return(
             batch=batch,
             buffer=buffer,
@@ -180,7 +180,7 @@ class DDPGPolicy(BasePolicy[TDDPGTrainingStats], Generic[TDDPGTrainingStats]):
 
     @staticmethod
     def _mse_optimizer(
-        batch: RolloutBatchProtocol,
+        batch: BatchWithReturnsProtocol,
         critic: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -196,7 +196,7 @@ class DDPGPolicy(BasePolicy[TDDPGTrainingStats], Generic[TDDPGTrainingStats]):
         optimizer.step()
         return td, critic_loss
 
-    def learn(self, batch: RolloutBatchProtocol, *args: Any, **kwargs: Any) -> TDDPGTrainingStats:  # type: ignore
+    def learn(self, batch: BatchWithReturnsProtocol, *args: Any, **kwargs: Any) -> TDDPGTrainingStats:  # type: ignore
         # critic
         td, critic_loss = self._mse_optimizer(batch, self.critic, self.critic_optim)
         batch.weight = td  # prio-buffer
