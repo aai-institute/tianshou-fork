@@ -2,7 +2,6 @@ from typing import Any, Self, TypeVar, cast
 
 import h5py
 import numpy as np
-from overrides import override
 
 from tianshou.data import Batch
 from tianshou.data.batch import (
@@ -16,7 +15,7 @@ from tianshou.data.utils.converter import from_hdf5, to_hdf5
 TBuffer = TypeVar("TBuffer", bound="ReplayBuffer")
 
 
-class ReplayBuffer(RolloutBatchProtocol):
+class ReplayBuffer:
     """:class:`~tianshou.data.ReplayBuffer` stores data generated from interaction between the policy and environment.
 
     ReplayBuffer can be considered as a specialized form (or management) of Batch. It
@@ -384,7 +383,6 @@ class ReplayBuffer(RolloutBatchProtocol):
                 raise exception  # val != Batch()
             return Batch()
 
-    @override
     def __getitem__(self, index: IndexType) -> RolloutBatchProtocol:
         """Return a data batch: self[index].
 
@@ -435,11 +433,10 @@ class ReplayBuffer(RolloutBatchProtocol):
         index: IndexType | None = None,
         default_value: float | None = None,
     ) -> None:
-
         self._meta.set_array_at_key(seq, key, index, default_value)
 
     def hasnull(self) -> bool:
-        return self._meta.hasnull()
+        return self[:].hasnull()
 
     def dropnull(self) -> None:
         # raise NotImplemented()
