@@ -28,11 +28,11 @@ class ReplayBuffer(RolloutBatchProtocol):
     :param size: the maximum size of replay buffer.
     :param stack_num: the frame-stack sampling argument, should be greater than or
         equal to 1. Default to 1 (no stacking).
-    :param ignore_obs_next: whether to not store obs_next. Default to False.
+    :param ignore_obs_next: whether to not store obs_next.
     :param save_only_last_obs: only save the last obs/obs_next when it has a shape
-        of (timestep, ...) because of temporal stacking. Default to False.
-    :param sample_avail: the parameter indicating sampling only available index
-        when using frame-stack sampling method. Default to False.
+        of (timestep, ...) because of temporal stacking.
+    :param sample_avail: whether to sample only available indices
+        when using the frame-stack sampling method.
     """
 
     _reserved_keys = (
@@ -359,7 +359,7 @@ class ReplayBuffer(RolloutBatchProtocol):
         stacked result as ``[obs[t-3], obs[t-2], obs[t-1], obs[t]]``.
 
         :param index: the index for getting stacked data.
-        :param str key: the key to get, should be one of the reserved_keys.
+        :param key: the key to get, should be one of the reserved_keys.
         :param default_value: if the given key's data is not found and default_value is
             set, return this default_value.
         :param stack_num: Default to self.stack_num.
