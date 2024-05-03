@@ -26,7 +26,7 @@ from tianshou.highlevel.agent import (
     REDQAgentFactory,
     SACAgentFactory,
     TD3AgentFactory,
-    TRPOAgentFactory,
+    TRPOAgentFactory, SIALSACAgentFactory,
 )
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import EnvFactory
@@ -65,7 +65,7 @@ from tianshou.highlevel.params.policy_params import (
     REDQParams,
     SACParams,
     TD3Params,
-    TRPOParams,
+    TRPOParams, SIALSACParams,
 )
 from tianshou.highlevel.params.policy_wrapper import PolicyWrapperFactory
 from tianshou.highlevel.persistence import (
@@ -1162,6 +1162,36 @@ class SACExperimentBuilder(
 
     def _create_agent_factory(self) -> AgentFactory:
         return SACAgentFactory(
+            self._params,
+            self._sampling_config,
+            self._get_actor_factory(),
+            self._get_critic_factory(0),
+            self._get_critic_factory(1),
+            self._get_optim_factory(),
+        )
+
+class SIALSACExperimentBuilder(
+    ExperimentBuilder,
+    _BuilderMixinActorFactory_ContinuousGaussian,
+    _BuilderMixinDualCriticFactory,
+):
+    def __init__(
+        self,
+        env_factory: EnvFactory,
+        experiment_config: ExperimentConfig | None = None,
+        sampling_config: SamplingConfig | None = None,
+    ):
+        super().__init__(env_factory, experiment_config, sampling_config)
+        _BuilderMixinActorFactory_ContinuousGaussian.__init__(self)
+        _BuilderMixinDualCriticFactory.__init__(self, self)
+        self._params: SIALSACParams = SIALSACParams()
+
+    def with_sialsac_param(self, params: SIALSACParams) -> Self:
+        self._params = params
+        return self
+
+    def _create_agent_factory(self) -> AgentFactory:
+        return SIALSACAgentFactory(
             self._params,
             self._sampling_config,
             self._get_actor_factory(),

@@ -5,6 +5,7 @@ from typing import Any, Generic, TypeVar, cast
 
 import gymnasium
 
+from imac.sialsac import SIALSACPolicy
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.data.collector import BaseCollector
 from tianshou.highlevel.config import SamplingConfig
@@ -37,7 +38,7 @@ from tianshou.highlevel.params.policy_params import (
     REDQParams,
     SACParams,
     TD3Params,
-    TRPOParams,
+    TRPOParams, SIALSACParams,
 )
 from tianshou.highlevel.params.policy_wrapper import PolicyWrapperFactory
 from tianshou.highlevel.persistence import PolicyPersistence
@@ -609,6 +610,9 @@ class SACAgentFactory(ActorDualCriticsAgentFactory[SACParams, SACPolicy]):
     def _get_policy_class(self) -> type[SACPolicy]:
         return SACPolicy
 
+class SIALSACAgentFactory(ActorDualCriticsAgentFactory[SIALSACParams, SIALSACPolicy]):
+    def _get_policy_class(self) -> type[SIALSACPolicy]:
+        return SIALSACPolicy
 
 class DiscreteSACAgentFactory(ActorDualCriticsAgentFactory[DiscreteSACParams, DiscreteSACPolicy]):
     def _get_policy_class(self) -> type[DiscreteSACPolicy]:
