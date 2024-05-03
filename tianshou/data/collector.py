@@ -679,7 +679,7 @@ class Collector(BaseCollector):
                 for local_done_idx in env_ind_local_D:
                     cur_ep_index_slice = slice(
                         ep_idx_R[local_done_idx],
-                        ptr_R[local_done_idx],
+                        ptr_R[local_done_idx] + 1,
                     )
 
                     ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_slice])
