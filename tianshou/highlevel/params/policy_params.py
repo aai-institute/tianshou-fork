@@ -516,34 +516,6 @@ class SACParams(_SACParams, ParamsMixinExplorationNoise, ParamsMixinActionScalin
 
 
 @dataclass
-class _SIALSACParams(_SACParams, ParamsMixinExplorationNoise, ParamsMixinActionScaling):
-    sial_alpha: float = 0.9
-    """ the weight of the sial reward bonus in the overall reward"""
-    sial_bonus_clip_range: tuple[float, float] = (-1, 1)
-    """ range to which the sial reward bonus is clipped"""
-    """
-    whether to use deterministic action (mean of Gaussian policy) in evaluation mode instead of stochastic
-    action sampled by the policy. Does not affect training."""
-
-    def _get_param_transformers(self) -> list[ParamTransformer]:
-        transformers = super()._get_param_transformers()
-        transformers.extend(ParamsMixinActorAndDualCritics._get_param_transformers(self))
-        transformers.append(ParamTransformerAutoAlpha("alpha"))
-        return transformers
-
-
-@dataclass
-class SIALSACParams(_SIALSACParams, ParamsMixinExplorationNoise, ParamsMixinActionScaling):
-    deterministic_eval: bool = True
-
-    def _get_param_transformers(self) -> list[ParamTransformer]:
-        transformers = super()._get_param_transformers()
-        transformers.extend(ParamsMixinExplorationNoise._get_param_transformers(self))
-        transformers.extend(ParamsMixinActionScaling._get_param_transformers(self))
-        return transformers
-
-
-@dataclass
 class DiscreteSACParams(_SACParams):
     pass
 

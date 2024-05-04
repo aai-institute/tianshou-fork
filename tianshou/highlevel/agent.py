@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar, cast
 
 import gymnasium
-from imac.sialsac import SIALSACPolicy
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.data.collector import BaseCollector
@@ -37,7 +36,6 @@ from tianshou.highlevel.params.policy_params import (
     PPOParams,
     REDQParams,
     SACParams,
-    SIALSACParams,
     TD3Params,
     TRPOParams,
 )
@@ -610,11 +608,6 @@ class ActorDualCriticsAgentFactory(
 class SACAgentFactory(ActorDualCriticsAgentFactory[SACParams, SACPolicy]):
     def _get_policy_class(self) -> type[SACPolicy]:
         return SACPolicy
-
-
-class SIALSACAgentFactory(ActorDualCriticsAgentFactory[SIALSACParams, SIALSACPolicy]):
-    def _get_policy_class(self) -> type[SIALSACPolicy]:
-        return SIALSACPolicy
 
 
 class DiscreteSACAgentFactory(ActorDualCriticsAgentFactory[DiscreteSACParams, DiscreteSACPolicy]):
