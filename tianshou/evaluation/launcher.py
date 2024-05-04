@@ -2,7 +2,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from copy import copy
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -10,6 +10,7 @@ from typing import Literal
 
 from joblib import Parallel, delayed
 
+from tianshou.data import InfoStats
 from tianshou.highlevel.experiment import Experiment
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,12 @@ class JoblibConfig:
 
 
 class ExpLauncher(ABC):
+    def __init__(
+        self,
+        experiment_runner: Callable[[Experiment], InfoStats] = lambda exp: exp.run(),
+    ):
+        self.experiment_runner = experiment_runner
+
     @abstractmethod
     def launch(self, experiments: Sequence[Experiment]) -> None:
         pass
@@ -34,11 +41,16 @@ class ExpLauncher(ABC):
 class SequentialExpLauncher(ExpLauncher):
     def launch(self, experiments: Sequence[Experiment]) -> None:
         for exp in experiments:
-            exp.run()
+            self.experiment_runner(exp)
 
 
 class JoblibExpLauncher(ExpLauncher):
-    def __init__(self, joblib_cfg: JoblibConfig | None = None) -> None:
+    def __init__(
+        self,
+        joblib_cfg: JoblibConfig | None = None,
+        experiment_runner: Callable[[Experiment], InfoStats] = lambda exp: exp.run(),
+    ) -> None:
+        super().__init__(experiment_runner=experiment_runner)
         self.joblib_cfg = copy(joblib_cfg) if joblib_cfg is not None else JoblibConfig()
         # Joblib's backend is hard-coded to loky since the threading backend produces different results
         if self.joblib_cfg.backend != "loky":
@@ -51,10 +63,9 @@ class JoblibExpLauncher(ExpLauncher):
     def launch(self, experiments: Sequence[Experiment]) -> None:
         Parallel(**asdict(self.joblib_cfg))(delayed(self._safe_execute)(exp) for exp in experiments)
 
-    @staticmethod
-    def _safe_execute(exp: Experiment) -> None:
+    def _safe_execute(self, exp: Experiment) -> None:
         try:
-            exp.run()
+            self.experiment_runner(exp)
         except BaseException as e:
             log.error(e)
 
