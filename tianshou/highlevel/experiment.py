@@ -205,27 +205,12 @@ class Experiment(ToStringMixin):
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
-    def run(
+    def create_experiment_world(
         self,
         override_experiment_name: str | Literal["DATETIME_TAG"] | None = None,
         logger_run_id: str | None = None,
         raise_error_on_dirname_collision: bool = True,
-    ) -> ExperimentResult:
-        """Run the experiment and return the results.
-
-        :param override_experiment_name: if not None, will adjust the current instance's `name` name attribute.
-            The name corresponds to the directory (within the logging
-            directory) where all results associated with the experiment will be saved.
-            The name may contain path separators (i.e. `os.path.sep`, as used by `os.path.join`), in which case
-            a nested directory structure will be created.
-            If "DATETIME_TAG" is passed, use a name containing the current date and time. This option
-            is useful for preventing file-name collisions if a single experiment is executed repeatedly.
-        :param logger_run_id: Run identifier to use for logger initialization/resumption (applies when
-            using wandb, in particular).
-        :param raise_error_on_dirname_collision: set to `False` e.g., when continuing a previously executed
-            experiment with the same name.
-        :return:
-        """
+    ) -> World:
         if override_experiment_name is not None:
             if override_experiment_name == "DATETIME_TAG":
                 override_experiment_name = datetime_tag()
@@ -307,24 +292,60 @@ class Experiment(ToStringMixin):
                     world,
                     self.config.device,
                 )
-
             # train policy
-            log.info("Starting training")
-            trainer_result: InfoStats | None = None
             if self.config.train:
                 trainer = self.agent_factory.create_trainer(world, policy_persistence)
                 world.trainer = trainer
-                trainer_result = trainer.run()
+
+        return world
+
+    def run(
+        self,
+        override_experiment_name: str | Literal["DATETIME_TAG"] | None = None,
+        logger_run_id: str | None = None,
+        raise_error_on_dirname_collision: bool = True,
+    ) -> ExperimentResult:
+        """Run the experiment and return the results.
+
+        :param override_experiment_name: if not None, will adjust the current instance's `name` name attribute.
+            The name corresponds to the directory (within the logging
+            directory) where all results associated with the experiment will be saved.
+            The name may contain path separators (i.e. `os.path.sep`, as used by `os.path.join`), in which case
+            a nested directory structure will be created.
+            If "DATETIME_TAG" is passed, use a name containing the current date and time. This option
+            is useful for preventing file-name collisions if a single experiment is executed repeatedly.
+        :param logger_run_id: Run identifier to use for logger initialization/resumption (applies when
+            using wandb, in particular).
+        :param raise_error_on_dirname_collision: set to `False` e.g., when continuing a previously executed
+            experiment with the same name.
+        :return:
+        """
+        world = self.create_experiment_world(
+            override_experiment_name=override_experiment_name,
+            logger_run_id=logger_run_id,
+            raise_error_on_dirname_collision=raise_error_on_dirname_collision,
+        )
+        persistence_dir = world.persist_directory
+        use_persistence = self.config.persistence_enabled
+
+        with logging.FileLoggerContext(
+            os.path.join(persistence_dir, self.LOG_FILENAME),
+            enabled=use_persistence and self.config.log_file_enabled,
+        ):
+            trainer_result: InfoStats | None = None
+            if self.config.train:
+                log.info("Starting training")
+                world.trainer.run()
                 log.info(f"Training result:\n{pformat(trainer_result)}")
 
             # watch agent performance
             if self.config.watch:
-                assert envs.watch_env is not None
+                assert world.envs.watch_env is not None
                 log.info("Watching agent performance")
                 self._watch_agent(
                     self.config.watch_num_episodes,
-                    policy,
-                    envs.watch_env,
+                    world.policy,
+                    world.envs.watch_env,
                     self.config.watch_render,
                 )
 
