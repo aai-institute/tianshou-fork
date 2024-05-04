@@ -1,7 +1,10 @@
 import multiprocessing
 from dataclasses import dataclass
 
+from tianshou.utils import logging
 from tianshou.utils.string import ToStringMixin
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -67,7 +70,7 @@ class SamplingConfig(ToStringMixin):
     """the total size of the sample/replay buffer, in which environment steps (transitions) are
     stored"""
 
-    step_per_collect: int = 2048
+    step_per_collect: int | None = None
     """
     the number of environment steps/transitions to collect in each collection step before the
     network update within each training step.
@@ -80,6 +83,9 @@ class SamplingConfig(ToStringMixin):
     See :attr:`num_epochs` for information on the total number of environment steps being
     collected during training.
     """
+
+    episode_per_collect: int | None = None
+    """TODO"""
 
     repeat_per_collect: int | None = 1
     """
@@ -137,3 +143,17 @@ class SamplingConfig(ToStringMixin):
     def __post_init__(self) -> None:
         if self.num_train_envs == -1:
             self.num_train_envs = multiprocessing.cpu_count()
+
+        if self.num_test_episodes == 0 and self.num_test_envs != 0:
+            log.warning(
+                f"Number of test episodes is set to 0, "
+                f"but number of test environments is ({self.num_test_envs}). "
+                f"This can cause unnecessary memory usage.",
+            )
+
+        if self.num_test_episodes != 0 and self.num_test_episodes % self.num_test_envs != 0:
+            log.warning(
+                f"Number of test episodes ({self.num_test_episodes} "
+                f"is not divisible by the number of test environments ({self.num_test_envs}). "
+                f"This can cause unnecessary memory usage, it is recommended to adjust this.",
+            )
