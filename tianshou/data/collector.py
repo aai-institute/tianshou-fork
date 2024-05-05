@@ -175,6 +175,20 @@ class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
         return {self.BATCH_KEY: episode_mc_return(rollout_batch.rew, self.gamma)}
 
 
+class HookFilterEpisodeRolloutMCReturn(EpisodeRolloutHook):
+    BATCH_KEY = "filter_optimality"
+
+    def __init__(self, threshold: float):
+        self.optimality_return_threshold = threshold
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
+        return {
+            self.BATCH_KEY: np.ones_like(rollout_batch.rew)
+            if sum(rollout_batch.rew) >= self.optimality_return_threshold
+            else np.zeros_like(rollout_batch.rew),
+        }
+
+
 class BaseCollector(ABC):
     """Used to collect data from a vector environment into a buffer using a given policy.
 
