@@ -341,9 +341,13 @@ class ReplayBuffer:
 
     def get(
         self,
-        index: int | list[int] | np.ndarray,
+        index: IndexType,
         key: str,
         default_value: Any = None,
+        # TODO 1: this is only here because of atari, it should never be needed (can be solved with index)
+        #  and should be removed
+        # TODO 2: does something entirely different from getitem
+        # TODO 3: key should not be required
         stack_num: int | None = None,
     ) -> Batch | np.ndarray:
         """Return the stacked result.
@@ -389,6 +393,9 @@ class ReplayBuffer:
         If stack_num is larger than 1, return the stacked obs and obs_next with shape
         (batch, len, ...).
         """
+        # TODO: this is a horrible hack leading to
+        #  buffer[slice] != buffer[np.arange(slice.start, slice.stop)]
+        # Fix asap, high priority!!!
         if isinstance(index, slice):  # change slice to np array
             # buffer[:] will get all available data
             indices = (

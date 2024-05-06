@@ -695,15 +695,16 @@ class Collector(BaseCollector):
                         ep_idx_R[local_done_idx],
                         ptr_R[local_done_idx] + 1,
                     )
+                    cur_ep_index_array = np.arange(cur_ep_index_slice.start, cur_ep_index_slice.stop)
 
-                    ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_slice])
+                    ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
                     episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
                     if episode_hook_additions is not None:
                         for key, array in episode_hook_additions.items():
                             self.buffer.set_array_at_key(
                                 array,
                                 key,
-                                index=cur_ep_index_slice,
+                                index=cur_ep_index_array,
                             )
 
                 # preparing for the next iteration
