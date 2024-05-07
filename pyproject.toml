@@ -24,7 +24,7 @@ classifiers = [
 exclude = ["test/*", "examples/*", "docs/*"]
 
 [tool.poetry.dependencies]
-python = "3.11"
+python = "~3.11"
 deepdiff = "^7.0.1"
 gymnasium = "^0.28.0"
 h5py = "^3.9.0"
