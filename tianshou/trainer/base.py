@@ -167,11 +167,12 @@ class BaseTrainer(ABC):
         save_checkpoint_fn: Callable[[int, int, int], str] | None = None,
         resume_from_log: bool = False,
         reward_metric: Callable[[np.ndarray], np.ndarray] | None = None,
-        logger: BaseLogger = LazyLogger(),
+        logger: BaseLogger | None = None,
         verbose: bool = True,
         show_progress: bool = True,
         test_in_train: bool = True,
     ):
+        logger = logger or LazyLogger()
         self.policy = policy
 
         if buffer is not None:
@@ -413,7 +414,7 @@ class BaseTrainer(ABC):
     def train_step(self) -> tuple[CollectStats, bool]:
         """Perform one training step.
 
-        If test_in_train and stop_fn are set, will compute the stop_fn on the mean return of the training data.
+        If `test_in_train` and `stop_fn` are set, will compute the stop_fn on the mean return of the training data.
         Then, if the stop_fn is True there, will collect test data also compute the stop_fn of the mean return
         on it.
         Finally, if the latter is also True, will set should_stop_training to True.

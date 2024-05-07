@@ -811,19 +811,34 @@ class Batch(BatchProtocol):
             batches = [batches]
         # check input format
         batch_list = []
+
+        original_keys_only_batch = self.apply_array_func(lambda x: None) if len(self) > 0 else None
+
         for batch in batches:
             if isinstance(batch, dict):
-                if len(batch) > 0:
-                    batch_list.append(Batch(batch))
-            elif isinstance(batch, Batch):
-                # x.is_empty() means that x is Batch() and should be ignored
-                if not batch.is_empty():
-                    batch_list.append(batch)
-            else:
+                batch = Batch(batch)
+            if not isinstance(batch, Batch):
                 raise ValueError(f"Cannot concatenate {type(batch)} in Batch.cat_")
+            if len(batch.get_keys()) == 0:
+                continue
+            if original_keys_only_batch is None:
+                original_keys_only_batch = batch.apply_array_func(lambda x: None)
+                batch_list.append(batch)
+                continue
+
+            cur_keys_only_batch = batch.apply_array_func(lambda x: None)
+            if original_keys_only_batch != cur_keys_only_batch:
+                raise ValueError(
+                    f"Batch.cat_ only supports concatenation of batches with the same structure but got "
+                    f"structures {original_keys_only_batch} and {cur_keys_only_batch}.",
+                )
+            batch_list.append(batch)
         if len(batch_list) == 0:
             return
         batches = batch_list
+
+        # TODO: lot's of the remaining logic is devoted to filling up remaining keys with zeros
+        #   this should be removed, and also the check above should be extended to nested keys
         try:
             # x.is_empty(recurse=True) here means x is a nested empty batch
             # like Batch(a=Batch), and we have to treat it as length zero and

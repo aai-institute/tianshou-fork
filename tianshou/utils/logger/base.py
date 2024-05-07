@@ -67,17 +67,17 @@ class BaseLogger(ABC):
         :return: the prepared dict.
         """
 
-    def log_train_data(self, log_data: dict, step: int) -> None:
+    def log_train_data(self, log_data: dict, env_step: int) -> None:
         """Use writer to log statistics generated during training.
 
         :param log_data: a dict containing the information returned by the collector during the train step.
-        :param step: stands for the timestep the collector result is logged.
+        :param env_step: stands for the timestep the collector result is logged.
         """
         # TODO: move interval check to calling method
-        if step - self.last_log_train_step >= self.train_interval:
+        if env_step - self.last_log_train_step >= self.train_interval:
             log_data = self.prepare_dict_for_logging(log_data)
-            self.write(f"{DataScope.TRAIN.value}/env_step", step, log_data)
-            self.last_log_train_step = step
+            self.write(f"{DataScope.TRAIN.value}/env_step", env_step, log_data)
+            self.last_log_train_step = env_step
 
     def log_test_data(self, log_data: dict, step: int) -> None:
         """Use writer to log statistics generated during evaluating.

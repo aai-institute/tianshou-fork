@@ -221,6 +221,7 @@ class ReplayBuffer:
         done: bool,
     ) -> tuple[int, float | np.ndarray, int, int]:
         """Maintain the buffer's state after adding one data batch.
+        Modifies many internal fields, in particular, `_size`.
 
         Return (index_to_be_modified, episode_reward, episode_length,
         episode_start_index).
