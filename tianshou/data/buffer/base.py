@@ -446,6 +446,9 @@ class ReplayBuffer:
     def hasnull(self) -> bool:
         return self[:].hasnull()
 
+    def isnull(self) -> RolloutBatchProtocol:
+        return self[:].isnull()
+
     def dropnull(self) -> None:
         # raise NotImplemented()
         self._meta = self._meta.dropnull()
