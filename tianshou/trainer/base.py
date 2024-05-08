@@ -610,7 +610,10 @@ class OffpolicyTrainer(BaseTrainer):
             )
 
         for _ in self._pbar(
-            range(n_gradient_steps), desc="Offpolicy gradient update", position=0, leave=False,
+            range(n_gradient_steps),
+            desc="Offpolicy gradient update",
+            position=0,
+            leave=False,
         ):
             update_stat = self._sample_and_update(self.train_collector.buffer)
             self.policy_update_time += update_stat.train_time
