@@ -303,7 +303,8 @@ class BaseTrainer(ABC):
         # perform n step_per_epoch
         with progress(total=self.step_per_epoch, desc=f"Epoch #{self.epoch}", **tqdm_config) as t:
             train_stat: CollectStatsBase
-            while t.n < t.total and not self.stop_fn_flag:
+            collected_steps = 0
+            while collected_steps < self.step_per_epoch and not self.stop_fn_flag:
                 if self.train_collector is not None:
                     train_stat, self.stop_fn_flag = self.train_step()
                     pbar_data_dict = {
@@ -313,7 +314,8 @@ class BaseTrainer(ABC):
                         "n/ep": str(train_stat.n_collected_episodes),
                         "n/st": str(train_stat.n_collected_steps),
                     }
-                    t.update(train_stat.n_collected_steps)
+                    collected_steps += train_stat.n_collected_steps
+                    t.update(min(collected_steps, self.step_per_epoch) - t.n)
                     if self.stop_fn_flag:
                         t.set_postfix(**pbar_data_dict)
                         break
