@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import asdict
+from functools import partial
 
 import numpy as np
 import tqdm
@@ -22,10 +23,8 @@ from tianshou.policy.base import TrainingStats
 from tianshou.trainer.utils import gather_info, test_episode
 from tianshou.utils import (
     BaseLogger,
-    DummyTqdm,
     LazyLogger,
     MovAvg,
-    tqdm_config,
 )
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
@@ -192,6 +191,7 @@ class BaseTrainer(ABC):
         # of the trainers. I believe it would be better to remove
         self._gradient_step = 0
         self.env_step = 0
+        self.env_episode = 0
         self.policy_update_time = 0.0
         self.max_epoch = max_epoch
         self.step_per_epoch = step_per_epoch
@@ -226,6 +226,11 @@ class BaseTrainer(ABC):
         self.best_epoch = self.start_epoch
         self.stop_fn_flag = False
         self.iter_num = 0
+
+    @property
+    def _pbar(self) -> type(tqdm.tqdm):
+        """Use as context manager or iterator, i.e., `with self._pbar(...) as t:` or `for _ in self._pbar(...):`."""
+        return partial(tqdm.tqdm, dynamic_ncols=True, ascii=True, disable=not self.show_progress)
 
     def _reset_collectors(self, reset_buffer: bool = False) -> None:
         if self.train_collector is not None:
@@ -298,28 +303,30 @@ class BaseTrainer(ABC):
             if self.stop_fn_flag:
                 raise StopIteration
 
-        progress = tqdm.tqdm if self.show_progress else DummyTqdm
-
         # perform n step_per_epoch
-        with progress(total=self.step_per_epoch, desc=f"Epoch #{self.epoch}", **tqdm_config) as t:
+        with self._pbar(total=self.step_per_epoch, desc=f"Epoch #{self.epoch}", position=1) as t:
             train_stat: CollectStatsBase
             collected_steps = 0
-            while collected_steps < self.step_per_epoch and not self.stop_fn_flag:
+            collected_eps = 0
+            while t.n < t.total and not self.stop_fn_flag:
                 if self.train_collector is not None:
                     train_stat, self.stop_fn_flag = self.train_step()
                     pbar_data_dict = {
                         "env_step": str(self.env_step),
+                        "env_episode": str(self.env_episode),
                         "rew": f"{self.last_rew:.2f}",
                         "len": str(int(self.last_len)),
                         "n/ep": str(train_stat.n_collected_episodes),
                         "n/st": str(train_stat.n_collected_steps),
                     }
                     collected_steps += train_stat.n_collected_steps
-                    t.update(min(collected_steps, self.step_per_epoch) - t.n)
+                    collected_eps += train_stat.n_collected_episodes
+                    t.update(train_stat.n_collected_steps)
                     if self.stop_fn_flag:
                         t.set_postfix(**pbar_data_dict)
-                        break
                 else:
+                    # TODO: there is no iteration happening here, it's the offline case
+                    #   Code should be restructured!
                     pbar_data_dict = {}
                     assert self.buffer, "No train_collector or buffer specified"
                     train_stat = CollectStatsBase(
@@ -416,10 +423,12 @@ class BaseTrainer(ABC):
     def train_step(self) -> tuple[CollectStats, bool]:
         """Perform one training step.
 
+        Note that no gradient steps are done here, only data collection and logging.
+
         If `test_in_train` and `stop_fn` are set, will compute the stop_fn on the mean return of the training data.
-        Then, if the stop_fn is True there, will collect test data also compute the stop_fn of the mean return
+        Then, if the `stop_fn` is True there, will collect test data also compute the stop_fn of the mean return
         on it.
-        Finally, if the latter is also True, will set should_stop_training to True.
+        Finally, if the latter is also True, will set `should_stop_training` to `True`.
 
         :return: A tuple of the training stats and a boolean indicating whether to stop training.
         """
@@ -428,7 +437,7 @@ class BaseTrainer(ABC):
         should_stop_training = False
         if self.train_fn:
             self.train_fn(self.epoch, self.env_step)
-        result = self.train_collector.collect(
+        collect_result = self.train_collector.collect(
             n_step=self.step_per_collect,
             n_episode=self.episode_per_collect,
         )
@@ -436,25 +445,26 @@ class BaseTrainer(ABC):
         if self.train_collector.buffer.hasnull():
             raise RuntimeError("Malformed buffer!")
 
-        self.env_step += result.n_collected_steps
+        self.env_step += collect_result.n_collected_steps
+        self.env_episode += collect_result.n_collected_episodes
 
-        if result.n_collected_episodes > 0:
-            assert result.returns_stat is not None  # for mypy
-            assert result.lens_stat is not None  # for mypy
-            self.last_rew = result.returns_stat.mean
-            self.last_len = result.lens_stat.mean
+        if collect_result.n_collected_episodes > 0:
+            assert collect_result.returns_stat is not None  # for mypy
+            assert collect_result.lens_stat is not None  # for mypy
+            self.last_rew = collect_result.returns_stat.mean
+            self.last_len = collect_result.lens_stat.mean
             if self.reward_metric:  # TODO: move inside collector
-                rew = self.reward_metric(result.returns)
-                result.returns = rew
-                result.returns_stat = SequenceSummaryStats.from_sequence(rew)
+                rew = self.reward_metric(collect_result.returns)
+                collect_result.returns = rew
+                collect_result.returns_stat = SequenceSummaryStats.from_sequence(rew)
 
-            self.logger.log_train_data(asdict(result), self.env_step)
+            self.logger.log_train_data(asdict(collect_result), self.env_step)
 
         if (
-            result.n_collected_episodes > 0
+            collect_result.n_collected_episodes > 0
             and self.test_in_train
             and self.stop_fn
-            and self.stop_fn(result.returns_stat.mean)  # type: ignore
+            and self.stop_fn(collect_result.returns_stat.mean)  # type: ignore
         ):
             assert self.test_collector is not None
             test_result = test_episode(
@@ -470,7 +480,7 @@ class BaseTrainer(ABC):
                 should_stop_training = True
                 self.best_reward = test_result.returns_stat.mean
                 self.best_reward_std = test_result.returns_stat.std
-        return result, should_stop_training
+        return collect_result, should_stop_training
 
     # TODO: move moving average computation and logging into its own logger
     # TODO: maybe think about a command line logger instead of always printing data dict
@@ -598,10 +608,11 @@ class OffpolicyTrainer(BaseTrainer):
                 f"n_gradient_steps is 0, n_collected_steps={n_collected_steps}, "
                 f"update_per_step={self.update_per_step}",
             )
-        for _ in range(n_gradient_steps):
-            update_stat = self._sample_and_update(self.train_collector.buffer)
 
-            # logging
+        for _ in self._pbar(
+            range(n_gradient_steps), desc="Offpolicy gradient update", position=0, leave=False,
+        ):
+            update_stat = self._sample_and_update(self.train_collector.buffer)
             self.policy_update_time += update_stat.train_time
         # TODO: only the last update_stat is returned, should be improved
         return update_stat
@@ -624,6 +635,11 @@ class OnpolicyTrainer(BaseTrainer):
     ) -> TrainingStats:
         """Perform one on-policy update by passing the entire buffer to the policy's update method."""
         assert self.train_collector is not None
+        # TODO: add logging like in off-policy. Iteration over minibatches currently happens in the learn implementation of
+        #   on-policy algos like PG or PPO
+        log.info(
+            f"Performing on-policy update on buffer of length {len(self.train_collector.buffer)}",
+        )
         training_stat = self.policy.update(
             sample_size=0,
             buffer=self.train_collector.buffer,

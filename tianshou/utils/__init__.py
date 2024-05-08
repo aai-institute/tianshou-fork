@@ -4,14 +4,11 @@ from tianshou.utils.logger.base import BaseLogger, LazyLogger
 from tianshou.utils.logger.tensorboard import TensorboardLogger
 from tianshou.utils.logger.wandb import WandbLogger
 from tianshou.utils.lr_scheduler import MultipleLRSchedulers
-from tianshou.utils.progress_bar import DummyTqdm, tqdm_config
 from tianshou.utils.statistics import MovAvg, RunningMeanStd
 
 __all__ = [
     "MovAvg",
     "RunningMeanStd",
-    "tqdm_config",
-    "DummyTqdm",
     "BaseLogger",
     "TensorboardLogger",
     "LazyLogger",
