@@ -55,10 +55,11 @@ def get_start_stop_tuples_around_edges(
 
     Then it will return the two tuples containig (start, stop) where we go from start to the next edge,
     and from the previous edge to stop.
+    :return: (start, upper_edge), (lower_edge, stop)
     """
-    stop_at_edge = bisect_right(edges, start)
-    start_at_edge = bisect_left(edges, stop)
-    return (start, stop_at_edge), (start_at_edge, stop)
+    upper_edge = bisect_right(edges, start)
+    lower_edge = bisect_left(edges, stop)
+    return (start, upper_edge), (lower_edge, stop)
 
 
 @dataclass(kw_only=True)
@@ -266,7 +267,12 @@ class BaseCollector(ABC):
         else:
             self._subbuffer_edges = np.array([0])
 
-    def _get_start_stop_tuples_for_edge_crossing_interval(self, start: int, stop: int):
+    def _get_start_stop_tuples_for_edge_crossing_interval(
+        self,
+        start: int,
+        stop: int,
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
+        """:return: (start, upper_edge), (lower_edge, stop)"""
         log.error(
             "Received an edge-crossing episode, proceeding. "
             f"{start=}, {stop=}, {self._subbuffer_edges=}",
@@ -835,7 +841,8 @@ class Collector(BaseCollector):
 
     # TODO: move to buffer
     def _get_buffer_index_and_entries(
-        self, entries_slice: slice,
+        self,
+        entries_slice: slice,
     ) -> tuple[np.ndarray, RolloutBatchProtocol]:
         """:param entries_slice: a slice object that selects the entries from the buffer.
         stop can be smaller than start, meaning that a sub-buffer edge is to be crossed
@@ -848,23 +855,22 @@ class Collector(BaseCollector):
                 entries_slice.stop,
             )
         else:
-            (low_edge, stop), (
-                start,
-                high_edge,
+            (start, upper_edge), (
+                lower_edge,
+                stop,
             ) = self._get_start_stop_tuples_for_edge_crossing_interval(
                 start,
                 stop,
             )
             cur_ep_index_array = np.concatenate(
-                (np.arange(start, high_edge), np.arange(low_edge, stop)),
+                (np.arange(start, upper_edge), np.arange(lower_edge, stop)),
             )
-            log.error(f"{start=}, {stop=}, {low_edge=}, {high_edge=}")
+            log.error(f"{start=}, {upper_edge=}, {lower_edge=}, {stop=}")
         try:
             ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
         except IndexError as e:
             raise RuntimeError(
-                "IndexError in buffer with"
-                f"{cur_ep_index_array=}",
+                f"IndexError in buffer with {start=}, {upper_edge=}, {lower_edge=}, {stop=} \n {cur_ep_index_array=}",
             ) from e
         return cur_ep_index_array, ep_rollout_batch
 
