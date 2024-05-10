@@ -2,7 +2,7 @@ import logging
 import time
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from copy import copy
 from dataclasses import dataclass
 from typing import Any, Protocol, Self, TypeVar, cast
@@ -47,18 +47,18 @@ def bisect_right(arr: np.ndarray, x: float) -> Any:
 
 
 def get_start_stop_tuples_around_edges(
-    edges: np.ndarray,
+    edges: np.ndarray | Sequence[int],
     start: int,
     stop: int,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
-    """We assume that stop is smaller than start and that edges is sorted.
+    """We assume that stop is smaller than start and that edges is a sorted array of integers.
 
     Then it will return the two tuples containig (start, stop) where we go from start to the next edge,
     and from the previous edge to stop.
     :return: (start, upper_edge), (lower_edge, stop)
     """
-    upper_edge = bisect_right(edges, start)
-    lower_edge = bisect_left(edges, stop)
+    upper_edge = int(bisect_right(edges, start))
+    lower_edge = int(bisect_left(edges, stop))
     return (start, upper_edge), (lower_edge, stop)
 
 
@@ -263,9 +263,10 @@ class BaseCollector(ABC):
                 0,
                 self.buffer.maxsize + 1,
                 self.buffer.maxsize / self.buffer.buffer_num,
+                dtype=int,
             )
         else:
-            self._subbuffer_edges = np.array([0])
+            self._subbuffer_edges = np.array([0, self.buffer.maxsize], dtype=int)
 
     def _get_start_stop_tuples_for_edge_crossing_interval(
         self,
@@ -853,6 +854,7 @@ class Collector(BaseCollector):
             cur_ep_index_array = np.arange(
                 entries_slice.start,
                 entries_slice.stop,
+                dtype=int,
             )
         else:
             (start, upper_edge), (
@@ -863,7 +865,7 @@ class Collector(BaseCollector):
                 stop,
             )
             cur_ep_index_array = np.concatenate(
-                (np.arange(start, upper_edge), np.arange(lower_edge, stop)),
+                (np.arange(start, upper_edge, dtype=int), np.arange(lower_edge, stop, dtype=int)),
             )
             log.error(f"{start=}, {upper_edge=}, {lower_edge=}, {stop=}")
         try:
