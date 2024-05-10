@@ -34,6 +34,33 @@ from tianshou.utils.torch_utils import in_eval_mode, in_train_mode
 log = logging.getLogger(__name__)
 
 
+def bisect_left(arr: np.ndarray, x: float) -> Any:
+    """Assuming arr is sorted, return the largest element el of arr s.t. el < x."""
+    el_index = np.searchsorted(arr, x, side="left") - 1
+    return arr[el_index]
+
+
+def bisect_right(arr: np.ndarray, x: float) -> Any:
+    """Assuming arr is sorted, return the smallest element el of arr s.t. el > x."""
+    el_index = np.searchsorted(arr, x, side="right")
+    return arr[el_index]
+
+
+def get_start_stop_tuples_around_edges(
+    edges: np.ndarray,
+    start: int,
+    stop: int,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """We assume that stop is smaller than start and that edges is sorted.
+
+    Then it will return the two tuples containig (start, stop) where we go from start to the next edge,
+    and from the previous edge to stop.
+    """
+    stop_at_edge = bisect_right(edges, start)
+    start_at_edge = bisect_left(edges, stop)
+    return (start, stop_at_edge), (start_at_edge, stop)
+
+
 @dataclass(kw_only=True)
 class CollectStatsBase(DataclassPPrintMixin):
     """The most basic stats, often used for offline learning."""
@@ -228,6 +255,28 @@ class BaseCollector(ABC):
         self._is_closed = False
 
         self._validate_buffer()
+
+        # TODO: hack, should be a property of the buffer
+        if isinstance(buffer, VectorReplayBuffer):
+            self._subbuffer_edges = np.arange(
+                0,
+                self.buffer.maxsize + 1,
+                self.buffer.maxsize / self.buffer.buffer_num,
+            )
+        else:
+            self._subbuffer_edges = np.array([0])
+
+    def _get_start_stop_tuples_for_edge_crossing_interval(self, start: int, stop: int):
+        log.error(
+            "Received an edge-crossing episode, proceeding. "
+            f"{start=}, {stop=}, {self._subbuffer_edges=}",
+        )
+        if stop >= start:
+            raise ValueError(
+                f"Expected stop < start, but got {start=}, {stop=}. "
+                f"For stop larger than start this should never be used, and stop=start should never occur.",
+            )
+        return get_start_stop_tuples_around_edges(self._subbuffer_edges, start, stop)
 
     def _validate_buffer(self) -> None:
         buf = self.buffer
@@ -695,12 +744,10 @@ class Collector(BaseCollector):
                         ep_idx_R[local_done_idx],
                         ptr_R[local_done_idx] + 1,
                     )
-                    cur_ep_index_array = np.arange(
-                        cur_ep_index_slice.start,
-                        cur_ep_index_slice.stop,
-                    )
 
-                    ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
+                    cur_ep_index_array, ep_rollout_batch = self._get_buffer_index_and_entries(
+                        cur_ep_index_slice,
+                    )
                     episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
                     if episode_hook_additions is not None:
                         for key, array in episode_hook_additions.items():
@@ -785,6 +832,35 @@ class Collector(BaseCollector):
             collect_time=collect_time,
             collect_speed=step_count / collect_time,
         )
+
+    # TODO: move to buffer
+    def _get_buffer_index_and_entries(
+        self, entries_slice: slice,
+    ) -> tuple[np.ndarray, RolloutBatchProtocol]:
+        """:param entries_slice: a slice object that selects the entries from the buffer.
+        stop can be smaller than start, meaning that a sub-buffer edge is to be crossed
+        :return: The indices of the entries in the buffer and the corresponding batch of entries.
+        """
+        start, stop = entries_slice.start, entries_slice.stop
+        if stop > start:
+            cur_ep_index_array = np.arange(
+                entries_slice.start,
+                entries_slice.stop,
+            )
+        else:
+            (low_edge, stop), (
+                start,
+                high_edge,
+            ) = self._get_start_stop_tuples_for_edge_crossing_interval(
+                start,
+                stop,
+            )
+            cur_ep_index_array = np.concatenate(
+                (np.arange(start, high_edge), np.arange(low_edge, stop)),
+            )
+            log.error(f"{cur_ep_index_array=}")
+        ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
+        return cur_ep_index_array, ep_rollout_batch
 
     def _reset_hidden_state_based_on_type(
         self,
