@@ -274,9 +274,8 @@ class BaseCollector(ABC):
         stop: int,
     ) -> tuple[tuple[int, int], tuple[int, int]]:
         """:return: (start, upper_edge), (lower_edge, stop)"""
-        log.error(
-            "Received an edge-crossing episode, proceeding. "
-            f"{start=}, {stop=}, {self._subbuffer_edges=}",
+        log.debug(
+            "Received an edge-crossing episode: {start=}, {stop=}, {self._subbuffer_edges=}",
         )
         if stop >= start:
             raise ValueError(
@@ -621,6 +620,12 @@ class Collector(BaseCollector):
         if n_step is not None:
             ready_env_ids_R = np.arange(self.env_num)
         elif n_episode is not None:
+            if self.env_num > n_episode:
+                log.warning(
+                    f"Number of episodes ({n_episode}) is smaller than the number of environments "
+                    f"({self.env_num}). This means that {self.env_num - n_episode} "
+                    f"environments (or, equivalently, parallel workers) will not be used!",
+                )
             ready_env_ids_R = np.arange(min(self.env_num, n_episode))
 
         use_grad = not no_grad
@@ -867,13 +872,8 @@ class Collector(BaseCollector):
             cur_ep_index_array = np.concatenate(
                 (np.arange(start, upper_edge, dtype=int), np.arange(lower_edge, stop, dtype=int)),
             )
-            log.error(f"{start=}, {upper_edge=}, {lower_edge=}, {stop=}")
-        try:
-            ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
-        except IndexError as e:
-            raise RuntimeError(
-                f"IndexError in buffer with {start=}, {upper_edge=}, {lower_edge=}, {stop=} \n {cur_ep_index_array=}",
-            ) from e
+            log.debug(f"{start=}, {upper_edge=}, {lower_edge=}, {stop=}")
+        ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
         return cur_ep_index_array, ep_rollout_batch
 
     def _reset_hidden_state_based_on_type(
