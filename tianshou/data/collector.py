@@ -858,8 +858,14 @@ class Collector(BaseCollector):
             cur_ep_index_array = np.concatenate(
                 (np.arange(start, high_edge), np.arange(low_edge, stop)),
             )
-            log.error(f"{cur_ep_index_array=}")
-        ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
+            log.error(f"{start=}, {stop=}, {low_edge=}, {high_edge=}")
+        try:
+            ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
+        except IndexError as e:
+            raise RuntimeError(
+                "IndexError in buffer with"
+                f"{cur_ep_index_array=}",
+            ) from e
         return cur_ep_index_array, ep_rollout_batch
 
     def _reset_hidden_state_based_on_type(
