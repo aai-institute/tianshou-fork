@@ -194,13 +194,22 @@ class EpisodeRolloutHook(RolloutHook, ABC):
 
 
 class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
-    BATCH_KEY = "mc_return"
+    MC_RETURN_KEY = "mc_return"
+    FULL_EPISODE_MC_RETURN_KEY = "full_episode_mc_return"
 
     def __init__(self, gamma: float):
         self.gamma = gamma
 
     def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
-        return {self.BATCH_KEY: episode_mc_return(rollout_batch.rew, self.gamma)}
+        mc_returns = episode_mc_return(rollout_batch.rew, self.gamma)
+        full_episode_mc_return = mc_returns[0]
+        return {
+            self.MC_RETURN_KEY: mc_returns,
+            self.FULL_EPISODE_MC_RETURN_KEY: np.full_like(
+                rollout_batch.rew,
+                full_episode_mc_return,
+            ),
+        }
 
 
 class HookFilterEpisodeRolloutMCReturn(EpisodeRolloutHook):
@@ -601,7 +610,7 @@ class Collector(BaseCollector):
         return act_RA, act_normalized_RA, policy_R, hidden_state_RH
 
     # TODO: reduce complexity, remove the noqa
-    def _collect(
+    def _collect(  # noqa: C901
         self,
         n_step: int | None = None,
         n_episode: int | None = None,
