@@ -255,7 +255,7 @@ class BaseCollector(ABC):
         if buffer is None:
             buffer = VectorReplayBuffer(len(env), len(env))
 
-        self.buffer: ReplayBuffer = buffer
+        self.buffer: ReplayBuffer | ReplayBufferManager = buffer
         self.policy = policy
         self.env = cast(BaseVectorEnv, env)
         self.exploration_noise = exploration_noise
@@ -266,16 +266,9 @@ class BaseCollector(ABC):
 
         self._validate_buffer()
 
-        # TODO: hack, should be a property of the buffer
-        if isinstance(buffer, VectorReplayBuffer):
-            self._subbuffer_edges = np.arange(
-                0,
-                self.buffer.maxsize + 1,
-                self.buffer.maxsize / self.buffer.buffer_num,
-                dtype=int,
-            )
-        else:
-            self._subbuffer_edges = np.array([0, self.buffer.maxsize], dtype=int)
+    @property
+    def _subbuffer_edges(self):
+        return self.buffer.subbuffer_edges
 
     def _get_start_stop_tuples_for_edge_crossing_interval(
         self,
@@ -719,7 +712,7 @@ class Collector(BaseCollector):
                     time.sleep(render)
 
             # add data into the buffer
-            ptr_R, ep_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
+            insertion_idx_R, ep_return_R, ep_len_R, ep_start_idx_R = self.buffer.add(
                 current_iteration_batch,
                 buffer_ids=ready_env_ids_R,
             )
@@ -741,34 +734,41 @@ class Collector(BaseCollector):
             if num_episodes_done_this_iter > 0:
                 # TODO: adjust the whole index story, don't use np.where, just slice with boolean arrays
                 # D - number of envs that reached done in the rollout above
-                env_ind_local_D = np.where(done_R)[0]
-                env_ind_global_D = ready_env_ids_R[env_ind_local_D]
-                episode_lens.extend(ep_len_R[env_ind_local_D])
-                episode_returns.extend(ep_rew_R[env_ind_local_D])
-                episode_start_indices.extend(ep_idx_R[env_ind_local_D])
+                env_done_local_idx_D = np.where(done_R)[0]
+                episode_lens.extend(ep_len_R[env_done_local_idx_D])
+                episode_returns.extend(ep_return_R[env_done_local_idx_D])
+                episode_start_indices.extend(ep_start_idx_R[env_done_local_idx_D])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
 
                 gym_reset_kwargs = gym_reset_kwargs or {}
+
+                # The index env_done_idx_D was based on 0, ..., R
+                # However, each env has an index in the context of the vectorized env and buffer. So the env 0 being done means
+                # that some env of the corresponding "global" index was done. The mapping between "local" index in
+                # 0,...,R and this global index is maintained by the ready_env_ids_R array
+                env_done_global_idx_D = ready_env_ids_R[env_done_local_idx_D]
                 obs_reset_DO, info_reset_D = self.env.reset(
-                    env_id=env_ind_global_D,
+                    env_id=env_done_global_idx_D,
                     **gym_reset_kwargs,
                 )
 
                 # Set the hidden state to zero or None for the envs that reached done
                 # TODO: does it have to be so complicated? We should have a single clear type for hidden_state instead of
                 #  this complex logic
-                self._reset_hidden_state_based_on_type(env_ind_local_D, last_hidden_state_RH)
+                self._reset_hidden_state_based_on_type(env_done_local_idx_D, last_hidden_state_RH)
 
-                for local_done_idx in env_ind_local_D:
+                for local_done_idx in env_done_local_idx_D:
                     cur_ep_index_slice = slice(
-                        ep_idx_R[local_done_idx],
-                        ptr_R[local_done_idx] + 1,
+                        ep_start_idx_R[local_done_idx],
+                        insertion_idx_R[local_done_idx] + 1,
                     )
 
                     cur_ep_index_array, ep_rollout_batch = self._get_buffer_index_and_entries(
                         cur_ep_index_slice,
                     )
+                    if len(ep_rollout_batch) > 1000:
+                        raise RuntimeError("bug")
                     episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
                     if episode_hook_additions is not None:
                         for key, array in episode_hook_additions.items():
@@ -779,8 +779,8 @@ class Collector(BaseCollector):
                             )
 
                 # preparing for the next iteration
-                last_obs_RO[env_ind_local_D] = obs_reset_DO
-                last_info_R[env_ind_local_D] = info_reset_D
+                last_obs_RO[env_done_local_idx_D] = obs_reset_DO
+                last_info_R[env_done_local_idx_D] = info_reset_D
 
                 # Handling the case when we have more ready envs than desired and are not done yet
                 #
@@ -806,7 +806,7 @@ class Collector(BaseCollector):
                         # step and we still need to collect the remaining episodes to reach the breaking condition.
 
                         # creating the mask
-                        env_to_be_ignored_ind_local_S = env_ind_local_D[:surplus_env_num]
+                        env_to_be_ignored_ind_local_S = env_done_local_idx_D[:surplus_env_num]
                         env_should_remain_R = np.ones_like(ready_env_ids_R, dtype=bool)
                         env_should_remain_R[env_to_be_ignored_ind_local_S] = False
                         # stripping the "idle" indices, shortening the relevant quantities from R to R-S
