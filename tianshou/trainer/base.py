@@ -520,14 +520,18 @@ class BaseTrainer(ABC):
             stats of the whole dataset
         """
 
-    def run(self, reset_prior_to_run: bool = True) -> InfoStats:
+    def run(self, reset_prior_to_run: bool = True, reset_buffer: bool = False) -> InfoStats:
         """Consume iterator.
 
         See itertools - recipes. Use functions that consume iterators at C speed
         (feed the entire iterator into a zero-length deque).
+        :param reset_prior_to_run: whether to reset collectors prior to run
+        :param reset_buffer: only has effect if `reset_prior_to_run` is True.
+            If True, will also reset the buffer. This is usually not necessary, use
+            with caution.
         """
         if reset_prior_to_run:
-            self.reset()
+            self.reset(reset_buffer=reset_buffer)
         try:
             self.is_run = True
             deque(self, maxlen=0)  # feed the entire iterator into a zero-length deque
@@ -664,10 +668,15 @@ class OnpolicyTrainer(BaseTrainer):
         elif self.batch_size > 0:
             self._gradient_step += int((len(self.train_collector.buffer) - 0.1) // self.batch_size)
 
-        # Note: this is the main difference to the off-policy trainer!
+        # Note 1: this is the main difference to the off-policy trainer!
         # The second difference is that batches of data are sampled without replacement
         # during training, whereas in off-policy or offline training, the batches are
         # sampled with replacement (and potentially custom prioritization).
+        # Note 2: in the policy-update we modify the buffer, which is not very clean.
+        # currently the modification will erase previous samples but keep things like
+        # _ep_rew and _ep_len. This means that such quantities can no longer be computed
+        # from samples still contained in the buffer, which is also not clean
+        # TODO: improve this situation
         self.train_collector.reset_buffer(keep_statistics=True)
 
         # The step is the number of mini-batches used for the update, so essentially
