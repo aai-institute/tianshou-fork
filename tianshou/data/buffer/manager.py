@@ -161,8 +161,6 @@ class ReplayBufferManager(ReplayBuffer):
                 batch.rew[batch_idx],
                 batch.done[batch_idx],
             )
-            if batch.done[batch_idx] and insertion_index == 999:
-                print("insertion_index", insertion_index)
             offset_insertion_idx = insertion_index + self._offset[buffer_id]
             offset_ep_start_idx = ep_start_idx + self._offset[buffer_id]
             if offset_ep_start_idx == 13000 and offset_insertion_idx == 12999:
