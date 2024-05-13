@@ -41,6 +41,16 @@ class ReplayBufferManager(ReplayBuffer):
         self._compile()
         self._meta: RolloutBatchProtocol
 
+        # keep in sync with reset!
+        self.last_index = self._offset.copy()
+        self._lengths = np.zeros_like(self._offset)
+        for buf in self.buffers:
+            buf.reset()
+
+    @property
+    def subbuffer_edges(self):
+        return self._extend_offset
+
     def _compile(self) -> None:
         lens = last = index = np.array([0])
         offset = np.array([0, 1])
@@ -52,6 +62,7 @@ class ReplayBufferManager(ReplayBuffer):
         return int(self._lengths.sum())
 
     def reset(self, keep_statistics: bool = False) -> None:
+        # keep in sync with init!
         self.last_index = self._offset.copy()
         self._lengths = np.zeros_like(self._offset)
         for buf in self.buffers:
@@ -141,21 +152,32 @@ class ReplayBufferManager(ReplayBuffer):
         # get index
         if buffer_ids is None:
             buffer_ids = np.arange(self.buffer_num)
-        ptrs, ep_lens, ep_rews, ep_idxs = [], [], [], []
+        insertion_indxS, ep_lens, ep_rews, ep_idxs = [], [], [], []
         for batch_idx, buffer_id in enumerate(buffer_ids):
-            ptr, ep_rew, ep_len, ep_idx = self.buffers[buffer_id]._add_index(
+            # TODO: don't access private method!
+            insertion_index, ep_rew, ep_len, ep_start_idx = self.buffers[
+                buffer_id
+            ]._update_state_pre_add(
                 batch.rew[batch_idx],
                 batch.done[batch_idx],
             )
-            ptrs.append(ptr + self._offset[buffer_id])
+            if batch.done[batch_idx] and insertion_index == 999:
+                print("insertion_index", insertion_index)
+            offset_insertion_idx = insertion_index + self._offset[buffer_id]
+            offset_ep_start_idx = ep_start_idx + self._offset[buffer_id]
+            if offset_ep_start_idx == 13000 and offset_insertion_idx == 12999:
+                print("wtf")
+
+            insertion_indxS.append(offset_insertion_idx)
             ep_lens.append(ep_len)
             ep_rews.append(ep_rew)
-            ep_idxs.append(ep_idx + self._offset[buffer_id])
-            self.last_index[buffer_id] = ptr + self._offset[buffer_id]
+            ep_idxs.append(offset_ep_start_idx)
+            self.last_index[buffer_id] = insertion_index + self._offset[buffer_id]
             self._lengths[buffer_id] = len(self.buffers[buffer_id])
-        ptrs = np.array(ptrs)
+        insertion_indxS = np.array(insertion_indxS)
         try:
-            self._meta[ptrs] = batch
+            self._meta[insertion_indxS] = batch
+        # TODO: don't do this!
         except ValueError:
             batch.rew = batch.rew.astype(float)
             batch.done = batch.done.astype(bool)
@@ -166,8 +188,8 @@ class ReplayBufferManager(ReplayBuffer):
             else:  # dynamic key pops up in batch
                 alloc_by_keys_diff(self._meta, batch, self.maxsize, False)
             self._set_batch_for_children()
-            self._meta[ptrs] = batch
-        return ptrs, np.array(ep_rews), np.array(ep_lens), np.array(ep_idxs)
+            self._meta[insertion_indxS] = batch
+        return insertion_indxS, np.array(ep_rews), np.array(ep_lens), np.array(ep_idxs)
 
     def sample_indices(self, batch_size: int | None) -> np.ndarray:
         # TODO: simplify this code

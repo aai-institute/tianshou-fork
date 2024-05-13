@@ -441,7 +441,7 @@ def test_herreplaybuffer(size: int = 10, bufsize: int = 100, sample_sz: int = 4)
     env = MyGoalEnv(env_size, array_state=False)
 
     buf = HERReplayBuffer(bufsize, compute_reward_fn=compute_reward_fn, horizon=30, future_k=8)
-    buf._index = 5  # shifted start index
+    buf._insertion_idx = 5  # shifted start index
     buf.future_p = 1
     for ep_len in [5, 10]:
         obs, _ = env.reset()
@@ -682,7 +682,7 @@ def test_hdf5() -> None:
         assert _buffers[k].maxsize == buffers[k].maxsize
         assert np.all(_buffers[k]._indices == buffers[k]._indices)
     for k in ["array", "prioritized"]:
-        assert _buffers[k]._index == buffers[k]._index
+        assert _buffers[k]._insertion_idx == buffers[k]._insertion_idx
         assert isinstance(buffers[k].get(0, "info"), Batch)
         assert isinstance(_buffers[k].get(0, "info"), Batch)
     for k in ["array"]:
@@ -967,6 +967,8 @@ def test_cachedbuffer() -> None:
     # used in test_collector
     buf = CachedReplayBuffer(ReplayBuffer(0, sample_avail=True), 4, 5)
     data = np.zeros(4)
+    # TODO: this doesn't make any sense - why a matrix reward?!
+    #  See error message in ReplayBuffer._update_state_pre_add
     rew = np.ones([4, 4])
     buf.add(Batch(obs=data, act=data, rew=rew, terminated=[0, 0, 1, 1], truncated=[0, 0, 0, 0]))
     buf.add(Batch(obs=data, act=data, rew=rew, terminated=[0, 0, 0, 0], truncated=[0, 0, 0, 0]))
