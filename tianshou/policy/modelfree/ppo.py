@@ -38,6 +38,7 @@ class PPOTrainingStats(TrainingStats):
         ent_losses: Sequence[float],
         ratios: Sequence[float],
         advantages: Sequence[float],
+        gradient_steps: int = 0,
     ) -> Self:
         return cls(
             loss=SequenceSummaryStats.from_sequence(losses),
@@ -46,6 +47,7 @@ class PPOTrainingStats(TrainingStats):
             ent_loss=SequenceSummaryStats.from_sequence(ent_losses),
             ratio=SequenceSummaryStats.from_sequence(ratios),
             advantage=SequenceSummaryStats.from_sequence(advantages),
+            gradient_steps=gradient_steps,
         )
 
 
