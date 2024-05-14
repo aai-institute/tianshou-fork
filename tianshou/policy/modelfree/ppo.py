@@ -25,7 +25,7 @@ class PPOTrainingStats(TrainingStats):
     vf_loss: SequenceSummaryStats
     ent_loss: SequenceSummaryStats
     # ratio: SequenceSummaryStats
-    advantage: SequenceSummaryStats
+    # advantage: SequenceSummaryStats
     gradient_steps: int = 0
 
     @classmethod
@@ -37,7 +37,7 @@ class PPOTrainingStats(TrainingStats):
         vf_losses: Sequence[float],
         ent_losses: Sequence[float],
         # ratios: Sequence[float],
-        advantages: Sequence[float],
+        # advantages: Sequence[float],
         gradient_steps: int = 0,
     ) -> Self:
         return cls(
@@ -46,7 +46,7 @@ class PPOTrainingStats(TrainingStats):
             vf_loss=SequenceSummaryStats.from_sequence(vf_losses),
             ent_loss=SequenceSummaryStats.from_sequence(ent_losses),
             # ratio=SequenceSummaryStats.from_sequence(ratios),
-            advantage=SequenceSummaryStats.from_sequence(advantages),
+            # advantage=SequenceSummaryStats.from_sequence(advantages),
             gradient_steps=gradient_steps,
         )
 
@@ -239,6 +239,6 @@ class PPOPolicy(A2CPolicy[TPPOTrainingStats], Generic[TPPOTrainingStats]):  # ty
             vf_losses=vf_losses,
             ent_losses=ent_losses,
             # ratios=ratios,
-            advantages=advantages,
+            # advantages=advantages,
             gradient_steps=gradient_steps,
         )
