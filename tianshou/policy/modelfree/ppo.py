@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, Self, TypeVar
 
 import gymnasium as gym
 import numpy as np
@@ -23,6 +24,22 @@ class PPOTrainingStats(TrainingStats):
     clip_loss: SequenceSummaryStats
     vf_loss: SequenceSummaryStats
     ent_loss: SequenceSummaryStats
+
+    @classmethod
+    def from_sequences(
+        cls,
+        *,
+        losses: Sequence[float],
+        clip_losses: Sequence[float],
+        vf_losses: Sequence[float],
+        ent_losses: Sequence[float],
+    ) -> Self:
+        return cls(
+            loss=SequenceSummaryStats.from_sequence(losses),
+            clip_loss=SequenceSummaryStats.from_sequence(clip_losses),
+            vf_loss=SequenceSummaryStats.from_sequence(vf_losses),
+            ent_loss=SequenceSummaryStats.from_sequence(ent_losses),
+        )
 
 
 TPPOTrainingStats = TypeVar("TPPOTrainingStats", bound=PPOTrainingStats)
@@ -203,14 +220,9 @@ class PPOPolicy(A2CPolicy[TPPOTrainingStats], Generic[TPPOTrainingStats]):  # ty
                 ent_losses.append(ent_loss.item())
                 losses.append(loss.item())
 
-        losses_summary = SequenceSummaryStats.from_sequence(losses)
-        clip_losses_summary = SequenceSummaryStats.from_sequence(clip_losses)
-        vf_losses_summary = SequenceSummaryStats.from_sequence(vf_losses)
-        ent_losses_summary = SequenceSummaryStats.from_sequence(ent_losses)
-
-        return PPOTrainingStats(  # type: ignore[return-value]
-            loss=losses_summary,
-            clip_loss=clip_losses_summary,
-            vf_loss=vf_losses_summary,
-            ent_loss=ent_losses_summary,
+        return PPOTrainingStats.from_sequences(  # type: ignore[return-value]
+            losses=losses,
+            clip_losses=clip_losses,
+            vf_losses=vf_losses,
+            ent_losses=ent_losses,
         )
