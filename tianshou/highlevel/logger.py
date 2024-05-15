@@ -45,7 +45,7 @@ class LoggerFactoryDefault(LoggerFactory):
         log_dir: str,
         experiment_name: str,
         run_id: str | None,
-        config_dict: dict,
+        config_dict: dict | None = None,
     ) -> TLogger:
         if self.logger_type in ["wandb", "tensorboard"]:
             writer = SummaryWriter(log_dir)

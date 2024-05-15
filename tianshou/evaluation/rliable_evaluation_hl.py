@@ -3,7 +3,7 @@ on different seeds using the rliable library. The API is experimental and subjec
 """
 
 import os
-from dataclasses import asdict, dataclass, fields
+from dataclasses import dataclass, fields
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +12,7 @@ from rliable import library as rly
 from rliable import plot_utils
 
 from tianshou.highlevel.experiment import Experiment
+from tianshou.highlevel.logger import LoggerFactoryDefault
 from tianshou.utils import logging
 from tianshou.utils.logger.base import DataScope
 
@@ -79,12 +80,19 @@ class RLiableExperimentResult:
             if entry.name.startswith(".") or not entry.is_dir():
                 continue
 
-            exp = Experiment.from_directory(entry.path)
-            logger = exp.logger_factory.create_logger(
+            try:
+                logger_factory = Experiment.from_directory(entry.path).logger_factory
+            # Usually this means from low-level API
+            except FileNotFoundError:
+                log.info(
+                    f"Could not find persisted experiment in {entry.path}, using default logger.",
+                )
+                logger_factory = LoggerFactoryDefault()
+
+            logger = logger_factory.create_logger(
                 entry.path,
                 entry.name,
                 None,
-                asdict(exp.config),
             )
             data = logger.restore_logged_data(entry.path)
 
