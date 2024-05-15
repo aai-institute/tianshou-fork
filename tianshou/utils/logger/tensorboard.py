@@ -136,8 +136,9 @@ class TensorboardLogger(BaseLogger):
 
         return epoch, env_step, gradient_step
 
+    @classmethod
     def restore_logged_data(
-        self,
+        cls,
         log_path: str,
     ) -> TRestoredData:
         """Restores the logged data from the tensorboard log directory.

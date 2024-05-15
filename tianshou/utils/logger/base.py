@@ -143,9 +143,10 @@ class BaseLogger(ABC):
         :return: epoch, env_step, gradient_step.
         """
 
+    @classmethod
     @abstractmethod
     def restore_logged_data(
-        self,
+        cls,
         log_path: str,
     ) -> TRestoredData:
         """Load the logged data from disk for post-processing.
@@ -181,5 +182,6 @@ class LazyLogger(BaseLogger):
     def restore_data(self) -> tuple[int, int, int]:
         return 0, 0, 0
 
-    def restore_logged_data(self, log_path: str) -> dict:
+    @classmethod
+    def restore_logged_data(cls, log_path: str) -> dict:
         return {}
