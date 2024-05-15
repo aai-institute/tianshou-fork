@@ -3,7 +3,6 @@ on different seeds using the rliable library. The API is experimental and subjec
 """
 
 import os
-from collections.abc import Sequence
 from dataclasses import dataclass, fields
 from typing import Literal
 
@@ -74,7 +73,9 @@ class RLiableExperimentResult:
 
     @classmethod
     def load_from_disk(
-        cls, exp_dir: str, max_env_step: int | None = None,
+        cls,
+        exp_dir: str,
+        max_env_step: int | None = None,
     ) -> "RLiableExperimentResult":
         """Load the experiment result from disk.
 
