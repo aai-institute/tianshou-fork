@@ -510,7 +510,6 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
         if buffer is None:
             return TrainingStats()  # type: ignore[return-value]
         start_time = time.time()
-        import pdb; pdb.set_trace()
         batch, indices = buffer.sample(sample_size)
         self.updating = True
         batch = self.process_fn(batch, buffer, indices)
