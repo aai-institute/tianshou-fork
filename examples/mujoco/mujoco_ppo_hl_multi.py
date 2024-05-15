@@ -20,7 +20,7 @@ import torch
 
 from examples.mujoco.mujoco_env import MujocoEnvFactory
 from tianshou.evaluation.launcher import RegisteredExpLauncher
-from tianshou.evaluation.rliable_evaluation_hl import RLiableExperimentResult
+from tianshou.evaluation.rliable_evaluation_hl import load_and_eval_experiments
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.experiment import (
     ExperimentConfig,
@@ -166,14 +166,7 @@ def main(
     return persistence_dir
 
 
-def eval_experiments(log_dir: str) -> RLiableExperimentResult:
-    """Evaluate the experiments in the given log directory using the rliable API."""
-    rliable_result = RLiableExperimentResult.load_from_disk(log_dir)
-    rliable_result.eval_results(show_plots=True, save_plots=True)
-    return rliable_result
-
-
 if __name__ == "__main__":
     log_dir = logging.run_cli(main, level=logging.INFO)
     assert isinstance(log_dir, str)  # for mypy
-    evaluation_result = eval_experiments(log_dir)
+    evaluation_result = load_and_eval_experiments(log_dir)

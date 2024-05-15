@@ -8,8 +8,7 @@ from dataclasses import dataclass, fields
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats as sst
-from rliable import library as rly
-from rliable import plot_utils
+from rliable import library as rly, plot_utils
 
 from tianshou.highlevel.experiment import Experiment
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -224,3 +223,19 @@ class RLiableExperimentResult:
             plt.show(block=False)
 
         return fig_iqm, ax_iqm, fig_profile, ax_profile
+
+
+def load_and_eval_experiments(
+    log_dir: str, show_plots: bool = True, save_plots: bool = True,
+) -> RLiableExperimentResult:
+    """Evaluate the experiments in the given log directory using the rliable API and return the loaded results object.
+
+    If neither show_plots nor save_plots is set to True, this is equivalent to just loading the results from disk.
+
+    :param log_dir: The directory containing the experiment results.
+    :param show_plots: If True, the plots are shown.
+    :param save_plots: If True, the plots are saved to the log directory.
+    """
+    rliable_result = RLiableExperimentResult.load_from_disk(log_dir)
+    rliable_result.eval_results(show_plots=True, save_plots=True)
+    return rliable_result
