@@ -4,11 +4,13 @@ on different seeds using the rliable library. The API is experimental and subjec
 
 import os
 from dataclasses import dataclass, fields
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats as sst
-from rliable import library as rly, plot_utils
+from rliable import library as rly
+from rliable import plot_utils
 
 from tianshou.highlevel.experiment import Experiment
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -61,8 +63,14 @@ class RLiableExperimentResult:
     test_episode_returns_RE: np.ndarray
     """The test episodes for each run of the experiment where each row corresponds to one run."""
 
+    train_episode_returns_RE: np.ndarray
+    """The training episodes for each run of the experiment where each row corresponds to one run."""
+
     env_steps_E: np.ndarray
     """The number of environment steps at which the test episodes were evaluated."""
+
+    env_steps_train_E: np.ndarray
+    """The number of environment steps at which the training episodes were evaluated."""
 
     @classmethod
     def load_from_disk(cls, exp_dir: str) -> "RLiableExperimentResult":
@@ -71,7 +79,9 @@ class RLiableExperimentResult:
         :param exp_dir: The directory from where the experiment results are restored.
         """
         test_episode_returns = []
+        train_episode_returns = []
         env_step_at_test = None
+        env_step_at_train = None
 
         # TODO: env_step_at_test should not be defined in a loop and overwritten at each iteration
         #  just for retrieving them. We might need a cleaner directory structure.
@@ -98,31 +108,53 @@ class RLiableExperimentResult:
             if DataScope.TEST.value not in data or not data[DataScope.TEST.value]:
                 continue
             restored_test_data = data[DataScope.TEST.value]
-            if not isinstance(restored_test_data, dict):
-                raise RuntimeError(
-                    f"Expected entry with key {DataScope.TEST.value} data to be a dictionary, "
-                    f"but got {restored_test_data=}.",
-                )
+            restored_train_data = data[DataScope.TRAIN.value]
+            for restored_data, scope in zip(
+                [restored_test_data, restored_train_data],
+                [DataScope.TEST, DataScope.TRAIN],
+                strict=True,
+            ):
+                if not isinstance(restored_data, dict):
+                    raise RuntimeError(
+                        f"Expected entry with key {scope.value} data to be a dictionary, "
+                        f"but got {restored_data=}.",
+                    )
             test_data = LoggedCollectStats.from_data_dict(restored_test_data)
+            train_data = LoggedCollectStats.from_data_dict(restored_train_data)
 
-            if test_data.returns_stat is None:
-                continue
-            test_episode_returns.append(test_data.returns_stat.mean)
-            env_step_at_test = test_data.env_step
+            if test_data.returns_stat is not None:
+                test_episode_returns.append(test_data.returns_stat.mean)
+                env_step_at_test = test_data.env_step
 
+            if train_data.returns_stat is not None:
+                train_episode_returns.append(train_data.returns_stat.mean)
+                env_step_at_train = train_data.env_step
+
+        test_data_found = True
+        train_data_found = True
         if not test_episode_returns or env_step_at_test is None:
-            raise ValueError(f"No experiment data found in {exp_dir}.")
+            log.warning(f"No test experiment data found in {exp_dir}.")
+            test_data_found = False
+        if not train_episode_returns or env_step_at_train is None:
+            log.warning(f"No train experiment data found in {exp_dir}.")
+            train_data_found = False
+
+        if not test_data_found and not train_data_found:
+            raise RuntimeError(f"No test or train data found in {exp_dir}.")
 
         return cls(
             test_episode_returns_RE=np.array(test_episode_returns),
             env_steps_E=np.array(env_step_at_test),
             exp_dir=exp_dir,
+            train_episode_returns_RE=np.array(train_episode_returns),
+            env_steps_train_E=np.array(env_step_at_train),
         )
 
     def _get_rliable_data(
         self,
         algo_name: str | None = None,
         score_thresholds: np.ndarray | None = None,
+        scope: DataScope | Literal["train", "test"] = DataScope.TEST,
     ) -> tuple[dict, np.ndarray, np.ndarray]:
         """Return the data in the format expected by the rliable library.
 
@@ -133,19 +165,27 @@ class RLiableExperimentResult:
 
         :return: A tuple score_dict, env_steps, and score_thresholds.
         """
+        if isinstance(scope, DataScope):
+            scope = scope.value
+        if scope == DataScope.TEST.value:
+            env_steps, returns = self.env_steps_E, self.test_episode_returns_RE
+        elif scope == DataScope.TRAIN.value:
+            env_steps, returns = self.env_steps_train_E, self.train_episode_returns_RE
+        else:
+            raise ValueError(f"Invalid scope {scope}, should be either 'TEST' or 'TRAIN'.")
         if score_thresholds is None:
             score_thresholds = np.linspace(
-                np.min(self.test_episode_returns_RE),
-                np.max(self.test_episode_returns_RE),
+                np.min(returns),
+                np.max(returns),
                 101,
             )
 
         if algo_name is None:
             algo_name = os.path.basename(self.exp_dir)
 
-        score_dict = {algo_name: self.test_episode_returns_RE}
+        score_dict = {algo_name: returns}
 
-        return score_dict, self.env_steps_E, score_thresholds
+        return score_dict, env_steps, score_thresholds
 
     def eval_results(
         self,
@@ -153,6 +193,7 @@ class RLiableExperimentResult:
         score_thresholds: np.ndarray | None = None,
         save_plots: bool = False,
         show_plots: bool = True,
+        scope: DataScope | Literal["train", "test"] = DataScope.TEST,
     ) -> tuple[plt.Figure, plt.Axes, plt.Figure, plt.Axes]:
         """Evaluate the results of an experiment and create a sample efficiency curve and a performance profile.
 
@@ -162,12 +203,14 @@ class RLiableExperimentResult:
             from the minimum and maximum test episode returns.
         :param save_plots: If True, the figures are saved to the experiment directory.
         :param show_plots: If True, the figures are shown.
+        :param scope: The scope of the evaluation, either 'TEST' or 'TRAIN'.
 
         :return: The created figures and axes.
         """
         score_dict, env_steps, score_thresholds = self._get_rliable_data(
             algo_name,
             score_thresholds,
+            scope,
         )
 
         iqm = lambda scores: sst.trim_mean(scores, proportiontocut=0.25, axis=0)
@@ -226,7 +269,10 @@ class RLiableExperimentResult:
 
 
 def load_and_eval_experiments(
-    log_dir: str, show_plots: bool = True, save_plots: bool = True,
+    log_dir: str,
+    show_plots: bool = True,
+    save_plots: bool = True,
+    scope: DataScope | Literal["train", "test", "both"] = DataScope.TEST,
 ) -> RLiableExperimentResult:
     """Evaluate the experiments in the given log directory using the rliable API and return the loaded results object.
 
@@ -235,7 +281,12 @@ def load_and_eval_experiments(
     :param log_dir: The directory containing the experiment results.
     :param show_plots: If True, the plots are shown.
     :param save_plots: If True, the plots are saved to the log directory.
+    :param scope: The scope of the evaluation, either 'TEST' or 'TRAIN'.
     """
     rliable_result = RLiableExperimentResult.load_from_disk(log_dir)
-    rliable_result.eval_results(show_plots=True, save_plots=True)
+    if scope == "both":
+        for scope in [DataScope.TEST, DataScope.TRAIN]:
+            rliable_result.eval_results(show_plots=True, save_plots=True, scope=scope)
+    else:
+        rliable_result.eval_results(show_plots=show_plots, save_plots=save_plots, scope=scope)
     return rliable_result

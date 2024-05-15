@@ -13,10 +13,21 @@ import torch
 
 from tianshou.data import Collector, InfoStats
 from tianshou.env import BaseVectorEnv
-from tianshou.highlevel.agent import (A2CAgentFactory, AgentFactory, DDPGAgentFactory, DQNAgentFactory,
-                                      DiscreteSACAgentFactory, IQNAgentFactory, NPGAgentFactory, PGAgentFactory,
-                                      PPOAgentFactory, REDQAgentFactory, SACAgentFactory, TD3AgentFactory,
-                                      TRPOAgentFactory)
+from tianshou.highlevel.agent import (
+    A2CAgentFactory,
+    AgentFactory,
+    DDPGAgentFactory,
+    DiscreteSACAgentFactory,
+    DQNAgentFactory,
+    IQNAgentFactory,
+    NPGAgentFactory,
+    PGAgentFactory,
+    PPOAgentFactory,
+    REDQAgentFactory,
+    SACAgentFactory,
+    TD3AgentFactory,
+    TRPOAgentFactory,
+)
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import EnvFactory
 from tianshou.highlevel.logger import LoggerFactory, LoggerFactoryDefault, TLogger
@@ -42,9 +53,20 @@ from tianshou.highlevel.module.critic import (
 from tianshou.highlevel.module.intermediate import IntermediateModuleFactory
 from tianshou.highlevel.module.special import ImplicitQuantileNetworkFactory
 from tianshou.highlevel.optim import OptimizerFactory, OptimizerFactoryAdam
-from tianshou.highlevel.params.policy_params import (A2CParams, DDPGParams, DQNParams, DiscreteSACParams, IQNParams,
-                                                     NPGParams, PGParams, PPOParams, REDQParams, SACParams, TD3Params,
-                                                     TRPOParams)
+from tianshou.highlevel.params.policy_params import (
+    A2CParams,
+    DDPGParams,
+    DiscreteSACParams,
+    DQNParams,
+    IQNParams,
+    NPGParams,
+    PGParams,
+    PPOParams,
+    REDQParams,
+    SACParams,
+    TD3Params,
+    TRPOParams,
+)
 from tianshou.highlevel.params.policy_wrapper import PolicyWrapperFactory
 from tianshou.highlevel.persistence import (
     PersistenceGroup,
@@ -158,9 +180,6 @@ class Experiment(ToStringMixin):
         :param restore_policy: whether the experiment shall be configured to restore the policy that was
             persisted in the given directory
         """
-        experiment_pickle_path = os.path.join(directory, cls.EXPERIMENT_PICKLE_FILENAME)
-        if not os.path.exists(experiment_pickle_path):
-            raise FileNotFoundError(f"Could not find experiment pickle in {directory}")
         with open(os.path.join(directory, cls.EXPERIMENT_PICKLE_FILENAME), "rb") as f:
             experiment: Experiment = pickle.load(f)
         if restore_policy:
