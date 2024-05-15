@@ -3,6 +3,7 @@ on different seeds using the rliable library. The API is experimental and subjec
 """
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass, fields
 from typing import Literal
 
@@ -13,8 +14,7 @@ from rliable import library as rly
 from rliable import plot_utils
 
 from tianshou.highlevel.experiment import Experiment
-from tianshou.highlevel.logger import LoggerFactoryDefault
-from tianshou.utils import logging
+from tianshou.utils import TensorboardLogger, logging
 from tianshou.utils.logger.base import DataScope
 
 log = logging.getLogger(__name__)
@@ -73,10 +73,14 @@ class RLiableExperimentResult:
     """The number of environment steps at which the training episodes were evaluated."""
 
     @classmethod
-    def load_from_disk(cls, exp_dir: str) -> "RLiableExperimentResult":
+    def load_from_disk(
+        cls, exp_dir: str, max_env_step: int | None = None,
+    ) -> "RLiableExperimentResult":
         """Load the experiment result from disk.
 
         :param exp_dir: The directory from where the experiment results are restored.
+        :param max_env_step: The maximum number of environment steps to consider.
+            If None, all data is considered.
         """
         test_episode_returns = []
         train_episode_returns = []
@@ -90,20 +94,30 @@ class RLiableExperimentResult:
                 continue
 
             try:
+                # TODO: fix
                 logger_factory = Experiment.from_directory(entry.path).logger_factory
+                logger_cls = type(logger_factory.create_logger(entry.path, entry.name, None))
             # Usually this means from low-level API
             except FileNotFoundError:
                 log.info(
                     f"Could not find persisted experiment in {entry.path}, using default logger.",
                 )
-                logger_factory = LoggerFactoryDefault()
+                logger_cls = TensorboardLogger
 
-            logger = logger_factory.create_logger(
-                entry.path,
-                entry.name,
-                None,
-            )
-            data = logger.restore_logged_data(entry.path)
+            data = logger_cls.restore_logged_data(entry.path)
+            # TODO: align low-level and high-level dir structure. This is a hack!
+            if not data:
+                dirs = [
+                    d for d in os.listdir(entry.path) if os.path.isdir(os.path.join(entry.path, d))
+                ]
+                if len(dirs) != 1:
+                    raise ValueError(
+                        f"Could not restore data from {entry.path}, "
+                        f"expected either events or exactly one subdirectory, ",
+                    )
+                data = logger_cls.restore_logged_data(os.path.join(entry.path, dirs[0]))
+            if not data:
+                raise ValueError(f"Could not restore data from {entry.path}.")
 
             if DataScope.TEST.value not in data or not data[DataScope.TEST.value]:
                 continue
@@ -142,12 +156,31 @@ class RLiableExperimentResult:
         if not test_data_found and not train_data_found:
             raise RuntimeError(f"No test or train data found in {exp_dir}.")
 
+        min_train_len = min([len(arr) for arr in train_episode_returns])
+        if max_env_step is not None:
+            min_train_len = min(min_train_len, max_env_step)
+        min_test_len = min([len(arr) for arr in test_episode_returns])
+        if max_env_step is not None:
+            min_test_len = min(min_test_len, max_env_step)
+
+        env_step_at_test = env_step_at_test[:min_test_len]
+        env_step_at_train = env_step_at_train[:min_train_len]
+        if max_env_step:
+            # find the index at which the maximum env step is reached with searchsorted
+            min_test_len = np.searchsorted(env_step_at_test, max_env_step)
+            min_train_len = np.searchsorted(env_step_at_train, max_env_step)
+            env_step_at_test = env_step_at_test[:min_test_len]
+            env_step_at_train = env_step_at_train[:min_train_len]
+
+        test_episode_returns = np.array([arr[:min_test_len] for arr in test_episode_returns])
+        train_episode_returns = np.array([arr[:min_train_len] for arr in train_episode_returns])
+
         return cls(
-            test_episode_returns_RE=np.array(test_episode_returns),
-            env_steps_E=np.array(env_step_at_test),
+            test_episode_returns_RE=test_episode_returns,
+            env_steps_E=env_step_at_test,
             exp_dir=exp_dir,
-            train_episode_returns_RE=np.array(train_episode_returns),
-            env_steps_train_E=np.array(env_step_at_train),
+            train_episode_returns_RE=train_episode_returns,
+            env_steps_train_E=env_step_at_train,
         )
 
     def _get_rliable_data(
@@ -194,6 +227,9 @@ class RLiableExperimentResult:
         save_plots: bool = False,
         show_plots: bool = True,
         scope: DataScope | Literal["train", "test"] = DataScope.TEST,
+        ax_iqm: plt.Axes | None = None,
+        ax_profile: plt.Axes | None = None,
+        algo2color: dict[str, str] | None = None,
     ) -> tuple[plt.Figure, plt.Axes, plt.Figure, plt.Axes]:
         """Evaluate the results of an experiment and create a sample efficiency curve and a performance profile.
 
@@ -217,7 +253,10 @@ class RLiableExperimentResult:
         iqm_scores, iqm_cis = rly.get_interval_estimates(score_dict, iqm)
 
         # Plot IQM sample efficiency curve
-        fig_iqm, ax_iqm = plt.subplots(ncols=1, figsize=(7, 5), constrained_layout=True)
+        if ax_iqm is None:
+            fig_iqm, ax_iqm = plt.subplots(ncols=1, figsize=(7, 5), constrained_layout=True)
+        else:
+            fig_iqm = ax_iqm.get_figure()
         plot_utils.plot_sample_efficiency_curve(
             env_steps,
             iqm_scores,
@@ -226,6 +265,7 @@ class RLiableExperimentResult:
             xlabel="env step",
             ylabel="IQM episode return",
             ax=ax_iqm,
+            colors=algo2color,
         )
         if show_plots:
             plt.show(block=False)
@@ -247,7 +287,10 @@ class RLiableExperimentResult:
         )
 
         # Plot score distributions
-        fig_profile, ax_profile = plt.subplots(ncols=1, figsize=(7, 5), constrained_layout=True)
+        if ax_profile is None:
+            fig_profile, ax_profile = plt.subplots(ncols=1, figsize=(7, 5), constrained_layout=True)
+        else:
+            fig_profile = ax_profile.get_figure()
         plot_utils.plot_performance_profiles(
             score_distributions,
             score_thresholds,
@@ -273,6 +316,7 @@ def load_and_eval_experiments(
     show_plots: bool = True,
     save_plots: bool = True,
     scope: DataScope | Literal["train", "test", "both"] = DataScope.TEST,
+    max_env_step: int | None = None,
 ) -> RLiableExperimentResult:
     """Evaluate the experiments in the given log directory using the rliable API and return the loaded results object.
 
@@ -282,8 +326,9 @@ def load_and_eval_experiments(
     :param show_plots: If True, the plots are shown.
     :param save_plots: If True, the plots are saved to the log directory.
     :param scope: The scope of the evaluation, either 'TEST' or 'TRAIN'.
+    :param max_env_step: The maximum number of environment steps to consider. If None, all data is considered.
     """
-    rliable_result = RLiableExperimentResult.load_from_disk(log_dir)
+    rliable_result = RLiableExperimentResult.load_from_disk(log_dir, max_env_step=max_env_step)
     if scope == "both":
         for scope in [DataScope.TEST, DataScope.TRAIN]:
             rliable_result.eval_results(show_plots=True, save_plots=True, scope=scope)
