@@ -22,7 +22,7 @@ class LoggerFactory(ToStringMixin, ABC):
         """Creates the logger.
 
         :param log_dir: path to the directory in which log data is to be stored
-        :param experiment_name: the name of the job, which may contain `os.path.sep`
+        :param experiment_name: the name of the job, which may contain `os.path.delimiter`
         :param run_id: a unique name, which, depending on the logging framework, may be used to identify the logger
         :param config_dict: a dictionary with data that is to be logged
         :return: the logger

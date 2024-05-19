@@ -2,12 +2,11 @@ from typing import Literal
 
 import numpy as np
 import pytest
-from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.utils import TensorboardLogger
+from tianshou.utils.logger.base import to_flat_dict
 
 
-class TestTensorBoardLogger:
+class TestLoggingUtils:
     @staticmethod
     @pytest.mark.parametrize(
         "input_dict, expected_output",
@@ -16,14 +15,12 @@ class TestTensorBoardLogger:
             ({"a": {"b": {"c": 1}}}, {"a/b/c": 1}),
         ],
     )
-    def test_flatten_dict_basic(
+    def test_to_flat_dict_basic(
         input_dict: dict[str, int | dict[str, int | dict[str, int]]]
         | dict[str, dict[str, dict[str, int]]],
         expected_output: dict[str, int],
     ) -> None:
-        logger = TensorboardLogger(SummaryWriter("log/logger"))
-        result = logger.prepare_dict_for_logging(input_dict)
-        assert result == expected_output
+        assert to_flat_dict(input_dict) == expected_output
 
     @staticmethod
     @pytest.mark.parametrize(
@@ -38,9 +35,7 @@ class TestTensorBoardLogger:
         delimiter: Literal["|", "."],
         expected_output: dict[str, int],
     ) -> None:
-        logger = TensorboardLogger(SummaryWriter("log/logger"))
-        result = logger.prepare_dict_for_logging(input_dict, delimiter=delimiter)
-        assert result == expected_output
+        assert to_flat_dict(input_dict, delimiter=delimiter) == expected_output
 
     @staticmethod
     @pytest.mark.parametrize(
@@ -59,8 +54,7 @@ class TestTensorBoardLogger:
         exclude_arrays: bool,
         expected_output: dict[str, np.ndarray],
     ) -> None:
-        logger = TensorboardLogger(SummaryWriter("log/logger"))
-        result = logger.prepare_dict_for_logging(input_dict, exclude_arrays=exclude_arrays)
+        result = to_flat_dict(input_dict, exclude_arrays=exclude_arrays)
         assert result.keys() == expected_output.keys()
         for val1, val2 in zip(result.values(), expected_output.values(), strict=True):
             assert np.all(val1 == val2)
@@ -76,6 +70,4 @@ class TestTensorBoardLogger:
         input_dict: dict[str, tuple[Literal[1]] | dict[str, str | dict[str, int]]],
         expected_output: dict[str, int],
     ) -> None:
-        logger = TensorboardLogger(SummaryWriter("log/logger"))
-        result = logger.prepare_dict_for_logging(input_dict)
-        assert result == expected_output
+        assert to_flat_dict(input_dict) == expected_output

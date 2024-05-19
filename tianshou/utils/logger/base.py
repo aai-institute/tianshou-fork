@@ -3,12 +3,15 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from enum import Enum
 from numbers import Number
+from typing import Any
 
 import numpy as np
 
 VALID_LOG_VALS_TYPE = int | Number | np.number | np.ndarray | float
 # It's unfortunate, but we can't use Union type in isinstance, hence we resort to this
 VALID_LOG_VALS = typing.get_args(VALID_LOG_VALS_TYPE)
+_VALID_LOG_DICT = dict[str, VALID_LOG_VALS_TYPE]
+VALID_LOG_DICT = dict[str, VALID_LOG_VALS_TYPE | _VALID_LOG_DICT]
 
 TRestoredData = dict[str, np.ndarray | dict[str, "TRestoredData"]]
 
@@ -49,22 +52,12 @@ class BaseLogger(ABC):
         self.last_log_info_step = -1
 
     @abstractmethod
-    def write(self, step_type: str, step: int, data: dict[str, VALID_LOG_VALS_TYPE]) -> None:
+    def write(self, step_type: str, step: int, data: VALID_LOG_DICT) -> None:
         """Specify how the writer is used to log data.
 
         :param str step_type: namespace which the data dict belongs to.
         :param step: stands for the ordinate of the data dict.
         :param data: the data to write with format ``{key: value}``.
-        """
-
-    @abstractmethod
-    def prepare_dict_for_logging(self, log_data: dict) -> dict[str, VALID_LOG_VALS_TYPE]:
-        """Prepare the dict for logging by filtering out invalid data types.
-
-        If necessary, reformulate the dict to be compatible with the writer.
-
-        :param log_data: the dict to be prepared for logging.
-        :return: the prepared dict.
         """
 
     def log_train_data(self, log_data: dict, env_step: int) -> None:
@@ -75,7 +68,6 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method
         if env_step - self.last_log_train_step >= self.train_interval:
-            log_data = self.prepare_dict_for_logging(log_data)
             self.write(f"{DataScope.TRAIN.value}/env_step", env_step, log_data)
             self.last_log_train_step = env_step
 
@@ -87,7 +79,6 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method (stupid because log_test_data is only called from function in utils.py, not from BaseTrainer)
         if step - self.last_log_test_step >= self.test_interval:
-            log_data = self.prepare_dict_for_logging(log_data)
             self.write(f"{DataScope.TEST.value}/env_step", step, log_data)
             self.last_log_test_step = step
 
@@ -99,7 +90,6 @@ class BaseLogger(ABC):
         """
         # TODO: move interval check to calling method
         if step - self.last_log_update_step >= self.update_interval:
-            log_data = self.prepare_dict_for_logging(log_data)
             self.write(f"{DataScope.UPDATE.value}/gradient_step", step, log_data)
             self.last_log_update_step = step
 
@@ -112,7 +102,6 @@ class BaseLogger(ABC):
         if (
             step - self.last_log_info_step >= self.info_interval
         ):  # TODO: move interval check to calling method
-            log_data = self.prepare_dict_for_logging(log_data)
             self.write(f"{DataScope.INFO.value}/epoch", step, log_data)
             self.last_log_info_step = step
 
@@ -161,12 +150,6 @@ class LazyLogger(BaseLogger):
     def __init__(self) -> None:
         super().__init__()
 
-    def prepare_dict_for_logging(
-        self,
-        data: dict[str, VALID_LOG_VALS_TYPE],
-    ) -> dict[str, VALID_LOG_VALS_TYPE]:
-        return data
-
     def write(self, step_type: str, step: int, data: dict[str, VALID_LOG_VALS_TYPE]) -> None:
         """The LazyLogger writes nothing."""
 
@@ -185,3 +168,44 @@ class LazyLogger(BaseLogger):
     @classmethod
     def restore_logged_data(cls, log_path: str) -> dict:
         return {}
+
+
+def to_flat_dict(
+    input_dict: dict[str, Any],
+    delimiter: str = "/",
+    exclude_arrays: bool = False,
+    exclude_invalid_entries: bool = True,
+    parent_key="",
+) -> dict[str, Any]:
+    """Flattens a nested dictionary by recursively traversing all levels and compressing the keys.
+
+    :param input_dict: The nested dictionary to be flattened.
+    :param delimiter: The delimiter used to separate the keys.
+    :param exclude_arrays: Whether to exclude numpy arrays from the output.
+    :param exclude_invalid_entries: Whether to exclude entries that are not of type VALID_LOG_VALS.
+    :param parent_key: The parent key used as a prefix before the input_dict keys.
+    :return: A flattened dictionary where the keys are compressed.
+    """
+    result = {}
+
+    def add_to_result(
+        cur_dict: dict,
+        prefix: str = "",
+    ) -> None:
+        for key, value in cur_dict.items():
+            if exclude_arrays and isinstance(value, np.ndarray):
+                continue
+
+            new_key = prefix + delimiter + key
+            new_key = new_key.lstrip(delimiter)
+
+            if isinstance(value, dict):
+                add_to_result(
+                    value,
+                    new_key,
+                )
+            elif isinstance(value, VALID_LOG_VALS):
+                result[new_key] = value
+
+    add_to_result(input_dict, prefix=parent_key)
+    return result
