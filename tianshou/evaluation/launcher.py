@@ -29,7 +29,9 @@ class JoblibConfig:
 class ExpLauncher(ABC):
     def __init__(
         self,
-        experiment_runner: Callable[[Experiment], InfoStats] = lambda exp: exp.run(),
+        experiment_runner: Callable[
+            [Experiment], InfoStats | None,
+        ] = lambda exp: exp.run().trainer_result,
     ):
         self.experiment_runner = experiment_runner
 
@@ -48,7 +50,9 @@ class JoblibExpLauncher(ExpLauncher):
     def __init__(
         self,
         joblib_cfg: JoblibConfig | None = None,
-        experiment_runner: Callable[[Experiment], InfoStats] = lambda exp: exp.run(),
+        experiment_runner: Callable[
+            [Experiment], InfoStats | None,
+        ] = lambda exp: exp.run().trainer_result,
     ) -> None:
         super().__init__(experiment_runner=experiment_runner)
         self.joblib_cfg = copy(joblib_cfg) if joblib_cfg is not None else JoblibConfig()
