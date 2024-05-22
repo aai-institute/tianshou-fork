@@ -19,12 +19,15 @@ import numpy as np
 import pandas as pd
 import torch
 from deepdiff import DeepDiff
+from torch.distributions import Categorical, Distribution, Independent, Normal
 
 from tianshou.utils import logging
 
 _SingleIndexType = slice | int | EllipsisType
 IndexType = np.ndarray | _SingleIndexType | list[_SingleIndexType] | tuple[_SingleIndexType, ...]
 TBatch = TypeVar("TBatch", bound="BatchProtocol")
+TDistribution = TypeVar("TDistribution", bound=Distribution)
+T = TypeVar("T")
 arr_type = torch.Tensor | np.ndarray
 
 log = logging.getLogger(__name__)
@@ -203,6 +206,18 @@ def alloc_by_keys_diff(
 
 class ProtocolCalledException(Exception):
     pass
+
+
+def get_sliced_dist(dist: TDistribution, index: IndexType) -> TDistribution:
+    """Slice a distribution object by the given index."""
+    if isinstance(dist, Categorical):
+        return Categorical(probs=dist.probs[index])
+    if isinstance(dist, Normal):
+        return Normal(loc=dist.loc[index], scale=dist.scale[index])
+    if isinstance(dist, Independent):
+        return Independent(get_sliced_dist(dist.base_dist, index), dist.reinterpreted_batch_ndims)
+    else:
+        raise NotImplementedError(f"Unsupported distribution for slicing: {dist}")
 
 
 # Note: This is implemented as a protocol because the interface
@@ -476,6 +491,12 @@ class BatchProtocol(Protocol):
         """
         raise ProtocolCalledException
 
+    def get(self, key: str, default: Any | None = None) -> Any:
+        raise ProtocolCalledException
+
+    def pop(self, key: str, default: Any | None = None) -> Any:
+        raise ProtocolCalledException
+
 
 class Batch(BatchProtocol):
     """See :class:`~tianshou.data.batch.BatchProtocol`."""
@@ -518,6 +539,12 @@ class Batch(BatchProtocol):
     def get_keys(self) -> KeysView:
         return self.__dict__.keys()
 
+    def get(self, key: str, default: Any | None = None) -> Any:
+        return self.__dict__.get(key, default)
+
+    def pop(self, key: str, default: Any | None = None) -> Any:
+        return self.__dict__.pop(key, default)
+
     def to_list_of_dicts(self) -> list[dict[str, Any]]:
         return [entry.to_dict() for entry in self]
 
@@ -556,22 +583,30 @@ class Batch(BatchProtocol):
 
     @overload
     def __getitem__(self, index: str) -> Any:
-        raise ProtocolCalledException
+        ...
 
     @overload
     def __getitem__(self, index: IndexType) -> Self:
-        raise ProtocolCalledException
+        ...
 
     def __getitem__(self, index: str | IndexType) -> Any:
-        """Return self[index]."""
+        """Returns either the value of a key or a sliced Batch object."""
         if isinstance(index, str):
             return self.__dict__[index]
         batch_items = self.items()
         if len(batch_items) > 0:
             new_batch = Batch()
             for batch_key, obj in batch_items:
-                if isinstance(obj, Batch) and obj.is_empty():
+                # None and empty Batches as values are added to any slice
+                if obj is None:
+                    new_batch.__dict__[batch_key] = None
+                elif isinstance(obj, Batch) and len(obj.get_keys()) == 0:
                     new_batch.__dict__[batch_key] = Batch()
+                # We attempt slicing of a distribution. This is hacky, but presents an important special case
+                elif isinstance(obj, Distribution):
+                    new_batch.__dict__[batch_key] = get_sliced_dist(obj, index)
+                # All other objects are either array-like or Batch-like, so hopefully sliceable
+                # A batch should have no scalars, and if it does, slicing them is not supported
                 else:
                     new_batch.__dict__[batch_key] = obj[index]
             return new_batch
@@ -1067,6 +1102,21 @@ class Batch(BatchProtocol):
                 yield self[indices[idx:]]
                 break
             yield self[indices[idx : idx + size]]
+
+    @overload
+    def apply_array_func(
+        self,
+        array_func: Callable[[np.ndarray | torch.Tensor], Any],
+    ) -> Self:
+        ...
+
+    @overload
+    def apply_array_func(
+        self,
+        array_func: Callable[[np.ndarray | torch.Tensor], Any],
+        inplace: Literal[True],
+    ) -> None:
+        ...
 
     def apply_array_func(
         self,

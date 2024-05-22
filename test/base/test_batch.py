@@ -9,8 +9,10 @@ import numpy as np
 import pytest
 import torch
 from deepdiff import DeepDiff
+from torch.distributions import Categorical, Independent, Normal
 
 from tianshou.data import Batch, to_numpy, to_torch
+from tianshou.data.batch import get_sliced_dist
 
 
 def test_batch() -> None:
@@ -833,3 +835,31 @@ class TestAssignment:
         assert batch2.dropnull() == Batch(a=[5, 7], b=[8, 10], c={"d": np.array([2, 4])})
         batch_no_nan = Batch(a=[4, 5, 6], b=[7, 8, 9], c={"d": np.array([1, 2, 3])})
         assert batch_no_nan.dropnull() == batch_no_nan
+
+
+class TestSlicing:
+    @staticmethod
+    def test_get_sliced_dist_with_categorical():
+        probs = torch.tensor(torch.rand([50, 4]))
+        dist = Categorical(probs=probs)
+        index = np.arange(3, 10)
+        sliced_dist = get_sliced_dist(dist, index)
+        assert isinstance(sliced_dist, Categorical)
+        assert torch.allclose(sliced_dist.probs, dist.probs[index])
+
+    @staticmethod
+    def test_get_sliced_dist_with_normal():
+        loc = torch.rand([50, 4])
+        scale = torch.abs(torch.rand([50, 4])) + 1
+        dist = Normal(loc=loc, scale=scale)
+        index = np.arange(3, 10)
+        sliced_dist = get_sliced_dist(dist, index)
+        assert isinstance(sliced_dist, Normal)
+        assert torch.allclose(sliced_dist.loc, dist.loc[index])
+        assert torch.allclose(sliced_dist.scale, dist.scale[index])
+        indep_dist = Independent(dist, 1)
+        sliced_indep_dist = get_sliced_dist(indep_dist, index)
+        assert isinstance(sliced_indep_dist, Independent)
+        assert isinstance(sliced_indep_dist.base_dist, Normal)
+        assert torch.allclose(sliced_indep_dist.base_dist.loc, indep_dist.base_dist.loc[index])
+        assert torch.allclose(sliced_indep_dist.base_dist.scale, indep_dist.base_dist.scale[index])

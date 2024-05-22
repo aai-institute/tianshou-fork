@@ -1384,7 +1384,7 @@ def test_custom_key() -> None:
             assert sampled_batch.__dict__[key].is_empty()
 
 
-def test_buffer_getattr_is_forwarded():
+def test_buffer_getattr_is_forwarded() -> None:
     size = 10
     buf = ReplayBuffer(size, ignore_obs_next=True)
     for i in range(4):
