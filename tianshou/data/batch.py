@@ -12,7 +12,7 @@ from typing import (
     Union,
     cast,
     overload,
-    runtime_checkable,
+    runtime_checkable, Literal,
 )
 
 import numpy as np
