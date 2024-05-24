@@ -140,8 +140,8 @@ def gather_data() -> VectorReplayBuffer:
     def save_best_fn(policy: BasePolicy) -> None:
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))
 
-    def stop_fn(mean_rewards: float) -> bool:
-        return mean_rewards >= args.reward_threshold
+    def stop_fn(best_reward: float) -> bool:
+        return best_reward >= args.reward_threshold
 
     # trainer
     OffpolicyTrainer(
