@@ -85,7 +85,11 @@ class SamplingConfig(ToStringMixin):
     """
 
     episode_per_collect: int | None = None
-    """TODO"""
+    """
+    the number of episodes to collect in each collection step before the network update within
+    each training step. If this is set, the number of environment steps collected in each
+    collection step is the sum of the lengths of the episodes collected.
+    """
 
     repeat_per_collect: int | None = 1
     """
@@ -157,3 +161,7 @@ class SamplingConfig(ToStringMixin):
                 f"is not divisible by the number of test environments ({self.num_test_envs}). "
                 f"This can cause unnecessary memory usage, it is recommended to adjust this.",
             )
+
+        assert sum([self.step_per_collect is not None, self.episode_per_collect is not None]) == 1, (
+            "Only one of `step_per_collect` and `episode_per_collect` can be set.",
+        )

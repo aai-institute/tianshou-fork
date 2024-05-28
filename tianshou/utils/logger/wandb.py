@@ -48,14 +48,18 @@ class WandbLogger(BaseLogger):
         test_interval: int = 1,
         update_interval: int = 1000,
         info_interval: int = 1,
-        save_interval: int = 1000,
+        save_interval: int = 1,
         write_flush: bool = True,
         project: str | None = None,
-        name: str | None = None,
         entity: str | None = None,
         run_id: str | None = None,
+        group: str | None = None,
+        job_type: str | None = None,
+        name: str | None = None,
         config: argparse.Namespace | dict | None = None,
         monitor_gym: bool = True,
+        disable_stats: bool = False,
+        log_dir: str | None = None,
     ) -> None:
         super().__init__(train_interval, test_interval, update_interval, info_interval)
         self.last_save_step = -1
@@ -68,13 +72,17 @@ class WandbLogger(BaseLogger):
         self.wandb_run = (
             wandb.init(
                 project=project,
+                entity=entity,
+                group=group,
+                job_type=job_type,
                 name=name,
                 id=run_id,
                 resume="allow",
-                entity=entity,
                 sync_tensorboard=True,
-                monitor_gym=monitor_gym,
+                # monitor_gym=monitor_gym,
+                dir=log_dir,
                 config=config,  # type: ignore
+                settings=wandb.Settings(_disable_stats=disable_stats),
             )
             if not wandb.run
             else wandb.run
@@ -102,6 +110,9 @@ class WandbLogger(BaseLogger):
                 "writing data. Try `logger.load(SummaryWriter(log_path))`",
             )
         self.tensorboard_logger.write(step_type, step, data)
+
+    def finalize(self):
+        self.wandb_run.finish()
 
     def save_data(
         self,

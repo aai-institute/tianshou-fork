@@ -4,7 +4,7 @@ from abc import abstractmethod
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pprint import pformat
 from typing import Literal, Self
 
@@ -252,6 +252,12 @@ class Experiment(ToStringMixin):
             # initialize logger
             full_config = self._build_config_dict()
             full_config.update(envs.info())
+            full_config['experiment_config'] = asdict(self.config)
+            full_config['sampling_config'] = asdict(self.sampling_config)
+            try:
+                full_config['policy_params'] = asdict(self.agent_factory.params)
+            except AttributeError:
+                pass
             logger: TLogger
             if use_persistence:
                 logger = self.logger_factory.create_logger(
@@ -334,6 +340,8 @@ class Experiment(ToStringMixin):
             if self.config.train:
                 log.info("Starting training")
                 world.trainer.run()
+                if use_persistence:
+                    world.logger.finalize()
                 log.info(f"Training result:\n{pformat(trainer_result)}")
 
             # watch agent performance

@@ -60,6 +60,9 @@ class BaseLogger(ABC):
         :param data: the data to write with format ``{key: value}``.
         """
 
+    def finalize(self):
+        pass
+
     def log_train_data(self, log_data: dict, env_step: int) -> None:
         """Use writer to log statistics generated during training.
 

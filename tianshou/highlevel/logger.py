@@ -74,3 +74,40 @@ class LoggerFactoryDefault(LoggerFactory):
                 return TensorboardLogger(writer)
             case _:
                 raise ValueError(f"Unknown logger type '{self.logger_type}'")
+
+
+class WandbLoggerFactory(LoggerFactory):
+    def __init__(
+        self,
+        wandb_project: str,
+        group: str = None,
+        job_type: str = None,
+        save_interval: int = 1
+    ):
+        self.wandb_project = wandb_project
+        self.group = group
+        self.job_type = job_type
+        self.save_interval = save_interval
+
+    def create_logger(
+        self,
+        log_dir: str,
+        experiment_name: str,
+        run_id: str | None,
+        config_dict: dict,
+    ) -> TLogger:
+        logger = WandbLogger(
+            save_interval=self.save_interval,
+            name=experiment_name.replace(os.path.sep, "__"),
+            run_id=run_id,
+            config=config_dict,
+            project=self.wandb_project,
+            # entity=
+            group=self.group,
+            job_type=self.job_type,
+            log_dir=log_dir
+        )
+
+        writer = SummaryWriter(log_dir)
+        logger.load(writer)
+        return logger
