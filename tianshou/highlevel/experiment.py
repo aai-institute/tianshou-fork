@@ -2,9 +2,9 @@ import os
 import pickle
 from abc import abstractmethod
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from copy import copy
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pprint import pformat
 from typing import Literal, Self
 
@@ -252,12 +252,11 @@ class Experiment(ToStringMixin):
             # initialize logger
             full_config = self._build_config_dict()
             full_config.update(envs.info())
-            full_config['experiment_config'] = asdict(self.config)
-            full_config['sampling_config'] = asdict(self.sampling_config)
-            try:
-                full_config['policy_params'] = asdict(self.agent_factory.params)
-            except AttributeError:
-                pass
+            full_config["experiment_config"] = asdict(self.config)
+            full_config["sampling_config"] = asdict(self.sampling_config)
+            with suppress(AttributeError):
+                full_config["policy_params"] = asdict(self.agent_factory.params)
+
             logger: TLogger
             if use_persistence:
                 logger = self.logger_factory.create_logger(

@@ -11,7 +11,6 @@ import gymnasium as gym
 import numpy as np
 import torch
 from overrides import override
-from torch.distributions import Distribution
 
 from tianshou.data import (
     Batch,
@@ -25,9 +24,10 @@ from tianshou.data import (
 from tianshou.data.batch import get_sliced_dist
 from tianshou.data.types import (
     ActBatchProtocol,
+    CollectActionComputationBatchProtocol,
     DistBatchProtocol,
     ObsBatchProtocol,
-    RolloutBatchProtocol, CollectActionComputationBatchProtocol,
+    RolloutBatchProtocol,
 )
 from tianshou.env import BaseVectorEnv, DummyVectorEnv
 from tianshou.policy import BasePolicy
@@ -196,22 +196,38 @@ class CombinedRolloutHook(RolloutHook):
             result.update(new_entries_dict)
         return result
 
+
 class StepHookProtocol(Protocol):
     """A protocol for step hooks."""
 
-    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+    def __call__(
+        self,
+        rollout_batch: RolloutBatchProtocol,
+        action_batch: CollectActionComputationBatchProtocol,
+    ) -> dict[str, np.ndarray]:
         """The function to call when the hook is executed."""
         ...
+
+
 class StepHook(StepHookProtocol, ABC):
     @abstractmethod
-    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+    def __call__(
+        self,
+        rollout_batch: RolloutBatchProtocol,
+        action_batch: CollectActionComputationBatchProtocol,
+    ) -> dict[str, np.ndarray]:
         ...
+
 
 class CombinedStepHook(StepHook):
     def __init__(self, *step_hooks: StepHookProtocol):
         self.step_hooks = step_hooks
 
-    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+    def __call__(
+        self,
+        rollout_batch: RolloutBatchProtocol,
+        action_batch: CollectActionComputationBatchProtocol,
+    ) -> dict[str, np.ndarray]:
         result = {}
         for step_hook in self.step_hooks:
             new_entries_dict = step_hook(rollout_batch, action_batch)
@@ -223,11 +239,18 @@ class CombinedStepHook(StepHook):
                 )
             result.update(new_entries_dict)
         return result
+
+
 class StepHookActionDistribution(StepHook):
     ACTION_DIST_KEY = "action_dist"
 
-    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+    def __call__(
+        self,
+        rollout_batch: RolloutBatchProtocol,
+        action_batch: CollectActionComputationBatchProtocol,
+    ) -> dict[str, np.ndarray]:
         return {self.ACTION_DIST_KEY: action_batch.dist}
+
 
 class EpisodeRolloutHook(RolloutHook, ABC):
     """Marker interface, hooks that operate on an rollout of a single episode should inherit from this."""
@@ -250,6 +273,7 @@ class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
                 full_episode_mc_return,
             ),
         }
+
 
 class HookFilterEpisodeRolloutMCReturn(EpisodeRolloutHook):
     BATCH_KEY = "filter_optimality"
@@ -522,7 +546,9 @@ class Collector(BaseCollector):
         on_episode_done_hook: EpisodeRolloutHook
         | Callable[[RolloutBatchProtocol], dict[str, np.ndarray]]
         | None = None,
-        on_step_hook: StepHook | Callable[[RolloutBatchProtocol, DistBatchProtocol], dict[str, np.ndarray]] | None = None,
+        on_step_hook: StepHook
+        | Callable[[RolloutBatchProtocol, DistBatchProtocol], dict[str, np.ndarray]]
+        | None = None,
     ) -> None:
         """:param policy: an instance of the :class:`~tianshou.policy.BasePolicy` class.
         :param env: a ``gym.Env`` environment or an instance of the
@@ -589,7 +615,6 @@ class Collector(BaseCollector):
             return self.on_step_hook(rollout_batch, action_batch)
         return None
 
-
     def reset_env(
         self,
         gym_reset_kwargs: dict[str, Any] | None = None,
@@ -655,14 +680,22 @@ class Collector(BaseCollector):
                     hidden_state_RH  # save state into buffer through policy attr
                 )
         try:
-            policy_dist_R = [get_sliced_dist(act_batch_RA.dist, i) for i in np.arange(0,act_batch_RA.dist.batch_shape[0])]
-        except:
+            policy_dist_R = [
+                get_sliced_dist(act_batch_RA.dist, i)
+                for i in np.arange(0, act_batch_RA.dist.batch_shape[0])
+            ]
+        except:  # noqa: E722
             policy_dist_R = None
-        return cast(CollectActionComputationBatchProtocol, Batch(act=act_RA,
-                                                                 act_normalized = act_normalized_RA,
-                                                                 policy_entry = policy_R,
-                                                                 dist = policy_dist_R,
-                                                                 hidden_state = hidden_state_RH ))
+        return cast(
+            CollectActionComputationBatchProtocol,
+            Batch(
+                act=act_RA,
+                act_normalized=act_normalized_RA,
+                policy_entry=policy_R,
+                dist=policy_dist_R,
+                hidden_state=hidden_state_RH,
+            ),
+        )
 
     # TODO: reduce complexity, remove the noqa
     def _collect(  # noqa: C901
@@ -769,7 +802,10 @@ class Collector(BaseCollector):
                 if not np.isclose(render, 0):
                     time.sleep(render)
 
-            step_hook_additions = self.run_on_step_hook(current_iteration_batch, collect_action_computation_batch)
+            step_hook_additions = self.run_on_step_hook(
+                current_iteration_batch,
+                collect_action_computation_batch,
+            )
             if step_hook_additions is not None:
                 for key, array in step_hook_additions.items():
                     current_iteration_batch.set_array_at_key(

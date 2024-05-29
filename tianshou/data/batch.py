@@ -6,13 +6,14 @@ from numbers import Number
 from types import EllipsisType
 from typing import (
     Any,
+    Literal,
     Protocol,
     Self,
     TypeVar,
     Union,
     cast,
     overload,
-    runtime_checkable, Literal,
+    runtime_checkable,
 )
 
 import numpy as np

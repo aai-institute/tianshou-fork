@@ -80,9 +80,9 @@ class WandbLoggerFactory(LoggerFactory):
     def __init__(
         self,
         wandb_project: str,
-        group: str = None,
-        job_type: str = None,
-        save_interval: int = 1
+        group: str | None = None,
+        job_type: str | None = None,
+        save_interval: int = 1,
     ):
         self.wandb_project = wandb_project
         self.group = group
@@ -105,7 +105,7 @@ class WandbLoggerFactory(LoggerFactory):
             # entity=
             group=self.group,
             job_type=self.job_type,
-            log_dir=log_dir
+            log_dir=log_dir,
         )
 
         writer = SummaryWriter(log_dir)

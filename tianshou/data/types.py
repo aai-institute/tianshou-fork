@@ -128,6 +128,7 @@ class ImitationBatchProtocol(ActBatchProtocol, Protocol):
     q_value: torch.Tensor
     imitation_logits: torch.Tensor
 
+
 class CollectActionComputationBatchProtocol(Protocol):
     """A protocol for a batch of data that is collected when computing actions within a single collect step.
 

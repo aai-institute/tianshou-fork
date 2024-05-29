@@ -30,7 +30,8 @@ class ExpLauncher(ABC):
     def __init__(
         self,
         experiment_runner: Callable[
-            [Experiment], InfoStats | None,
+            [Experiment],
+            InfoStats | None,
         ] = lambda exp: exp.run().trainer_result,
     ):
         self.experiment_runner = experiment_runner
@@ -51,7 +52,8 @@ class JoblibExpLauncher(ExpLauncher):
         self,
         joblib_cfg: JoblibConfig | None = None,
         experiment_runner: Callable[
-            [Experiment], InfoStats | None,
+            [Experiment],
+            InfoStats | None,
         ] = lambda exp: exp.run().trainer_result,
     ) -> None:
         super().__init__(experiment_runner=experiment_runner)
