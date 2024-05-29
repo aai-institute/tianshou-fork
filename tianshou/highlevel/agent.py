@@ -199,6 +199,7 @@ class OnPolicyAgentFactory(AgentFactory, ABC):
             episode_per_test=sampling_config.num_test_episodes,
             batch_size=sampling_config.batch_size,
             step_per_collect=sampling_config.step_per_collect,
+            episode_per_collect=sampling_config.episode_per_collect,
             save_best_fn=policy_persistence.get_save_best_fn(world),
             save_checkpoint_fn=policy_persistence.get_save_checkpoint_fn(world),
             logger=world.logger,
