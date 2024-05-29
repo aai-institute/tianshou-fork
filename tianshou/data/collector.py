@@ -22,6 +22,7 @@ from tianshou.data import (
     VectorReplayBuffer,
     to_numpy,
 )
+from tianshou.data.batch import get_sliced_dist
 from tianshou.data.types import (
     ActBatchProtocol,
     DistBatchProtocol,
@@ -195,6 +196,38 @@ class CombinedRolloutHook(RolloutHook):
             result.update(new_entries_dict)
         return result
 
+class StepHookProtocol(Protocol):
+    """A protocol for step hooks."""
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+        """The function to call when the hook is executed."""
+        ...
+class StepHook(StepHookProtocol, ABC):
+    @abstractmethod
+    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+        ...
+
+class CombinedStepHook(StepHook):
+    def __init__(self, *step_hooks: StepHookProtocol):
+        self.step_hooks = step_hooks
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+        result = {}
+        for step_hook in self.step_hooks:
+            new_entries_dict = step_hook(rollout_batch, action_batch)
+            if duplicated_entries := set(new_entries_dict).difference(result):
+                raise RuntimeError(
+                    f"Combined step hook lead to previously "
+                    f"computed entries that would be overwritten: {duplicated_entries=}. "
+                    f"Consider combining only hooks which will deliver non-overlapping entries to solve this.",
+                )
+            result.update(new_entries_dict)
+        return result
+class StepHookActionDistribution(StepHook):
+    ACTION_DIST_KEY = "action_dist"
+
+    def __call__(self, rollout_batch: RolloutBatchProtocol, action_batch: CollectActionComputationBatchProtocol) -> dict[str, np.ndarray]:
+        return {self.ACTION_DIST_KEY: action_batch.dist}
 
 class EpisodeRolloutHook(RolloutHook, ABC):
     """Marker interface, hooks that operate on an rollout of a single episode should inherit from this."""
@@ -217,12 +250,6 @@ class EpisodeRolloutHookMCReturn(EpisodeRolloutHook):
                 full_episode_mc_return,
             ),
         }
-
-class EpisodeRolloutHookGaussianPolicy(EpisodeRolloutHook):
-    POLICY_DIST_KEY = "policy_dist"
-
-    def __call__(self, rollout_batch: RolloutBatchProtocol, policy:BasePolicy) -> dict[str, np.ndarray]:
-        return {self.POLICY_DIST_KEY: policy(rollout_batch).dist}
 
 class HookFilterEpisodeRolloutMCReturn(EpisodeRolloutHook):
     BATCH_KEY = "filter_optimality"
@@ -495,6 +522,7 @@ class Collector(BaseCollector):
         on_episode_done_hook: EpisodeRolloutHook
         | Callable[[RolloutBatchProtocol], dict[str, np.ndarray]]
         | None = None,
+        on_step_hook: StepHook | Callable[[RolloutBatchProtocol, DistBatchProtocol], dict[str, np.ndarray]] | None = None,
     ) -> None:
         """:param policy: an instance of the :class:`~tianshou.policy.BasePolicy` class.
         :param env: a ``gym.Env`` environment or an instance of the
@@ -518,6 +546,8 @@ class Collector(BaseCollector):
             Care must be taken when using such hook, as for unfinished episodes one can easily end
             up with NaNs in the buffer. It is recommended to use the hooks only with the `n_episode` option
             in `collect`, or to strip the buffer of NaNs after the collection.
+        :param on_step_hook: if passed, will be executed after each step of the collection and modifies the
+            rollout batch that will be added to the buffer.
         """
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
         self._pre_collect_obs_RO: np.ndarray | None = None
@@ -526,6 +556,7 @@ class Collector(BaseCollector):
 
         self._is_closed = False
         self.on_episode_done_hook = on_episode_done_hook
+        self.on_step_hook = on_step_hook
         self.collect_step, self.collect_episode, self.collect_time = 0, 0, 0.0
 
     def close(self) -> None:
@@ -547,6 +578,17 @@ class Collector(BaseCollector):
         if self.on_episode_done_hook is not None:
             return self.on_episode_done_hook(episode_batch)
         return None
+
+    def run_on_step_hook(
+        self,
+        rollout_batch: RolloutBatchProtocol,
+        action_batch: CollectActionComputationBatchProtocol,
+    ) -> dict[str, np.ndarray] | None:
+        """Executes the `on_step_hook` that was passed on init."""
+        if self.on_step_hook is not None:
+            return self.on_step_hook(rollout_batch, action_batch)
+        return None
+
 
     def reset_env(
         self,
@@ -613,7 +655,7 @@ class Collector(BaseCollector):
                     hidden_state_RH  # save state into buffer through policy attr
                 )
         try:
-            policy_dist_R = act_batch_RA.dist
+            policy_dist_R = [get_sliced_dist(act_batch_RA.dist, i) for i in np.arange(0,act_batch_RA.dist.batch_shape[0])]
         except:
             policy_dist_R = None
         return cast(CollectActionComputationBatchProtocol, Batch(act=act_RA,
@@ -666,6 +708,7 @@ class Collector(BaseCollector):
         num_collected_episodes = 0
         episode_returns: list[float] = []
         episode_lens: list[int] = []
+
         episode_start_indices: list[int] = []
 
         # in case we select fewer episodes than envs, we run only some of them
@@ -685,7 +728,7 @@ class Collector(BaseCollector):
             #     )
             # restore the state: if the last state is None, it won't store
 
-            # get the next action
+            # get the next action and related stats
             collect_action_computation_batch = self._compute_action_policy_hidden(
                 random=random,
                 ready_env_ids_R=ready_env_ids_R,
@@ -726,6 +769,13 @@ class Collector(BaseCollector):
                 if not np.isclose(render, 0):
                     time.sleep(render)
 
+            step_hook_additions = self.run_on_step_hook(current_iteration_batch, collect_action_computation_batch)
+            if step_hook_additions is not None:
+                for key, array in step_hook_additions.items():
+                    current_iteration_batch.set_array_at_key(
+                        array,
+                        key,
+                    )
             # add data into the buffer
             insertion_idx_R, ep_return_R, ep_len_R, ep_start_idx_R = self.buffer.add(
                 current_iteration_batch,
@@ -742,7 +792,7 @@ class Collector(BaseCollector):
             # so we copy to not affect the data in the buffer
             last_obs_RO = copy(obs_next_RO)
             last_info_R = copy(info_R)
-            last_hidden_state_RH = copy(collect_action_computation_batch.hidden_state_RH)
+            last_hidden_state_RH = copy(collect_action_computation_batch.hidden_state)
 
             # Preparing last_obs_RO, last_info_R, last_hidden_state_RH for the next while-loop iteration
             # Resetting envs that reached done, or removing some of them from the collection if needed (see below)
@@ -828,7 +878,7 @@ class Collector(BaseCollector):
                         ready_env_ids_R = ready_env_ids_R[env_should_remain_R]
                         last_obs_RO = last_obs_RO[env_should_remain_R]
                         last_info_R = last_info_R[env_should_remain_R]
-                        if collect_action_computation_batch.hidden_state_RH is not None:
+                        if collect_action_computation_batch.hidden_state is not None:
                             last_hidden_state_RH = last_hidden_state_RH[env_should_remain_R]  # type: ignore[index]
 
             if (n_step and step_count >= n_step) or (
