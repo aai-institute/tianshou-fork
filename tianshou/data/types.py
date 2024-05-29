@@ -2,6 +2,7 @@ from typing import Protocol
 
 import numpy as np
 import torch
+from torch.distributions import Distribution
 
 from tianshou.data import Batch
 from tianshou.data.batch import BatchProtocol, arr_type
@@ -126,3 +127,18 @@ class ImitationBatchProtocol(ActBatchProtocol, Protocol):
     state: dict | Batch | np.ndarray | None
     q_value: torch.Tensor
     imitation_logits: torch.Tensor
+
+
+class CollectActionComputationBatchProtocol(Protocol):
+    """A protocol for a batch of data that is collected when computing actions within a single collect step.
+
+    All arrat fields all have length R, where R is the number of ready envs. The dist field
+    is a Distribution with batch shape R. It can be sliced using `get_sliced_dist` or by slicing
+    the containing Batch itself.
+    """
+
+    act: np.ndarray | torch.Tensor
+    act_normalized: np.ndarray | torch.Tensor
+    policy_entry: Batch
+    dist: Distribution | None
+    hidden_state: np.ndarray | torch.Tensor | Batch | None

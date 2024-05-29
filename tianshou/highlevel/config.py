@@ -162,6 +162,6 @@ class SamplingConfig(ToStringMixin):
                 f"This can cause unnecessary memory usage, it is recommended to adjust this.",
             )
 
-        assert sum([self.step_per_collect is not None, self.episode_per_collect is not None]) == 1, (
-            "Only one of `step_per_collect` and `episode_per_collect` can be set.",
-        )
+        assert (
+            sum([self.step_per_collect is not None, self.episode_per_collect is not None]) == 1
+        ), ("Only one of `step_per_collect` and `episode_per_collect` can be set.",)
