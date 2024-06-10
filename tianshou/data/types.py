@@ -46,6 +46,11 @@ class PrioBatchProtocol(RolloutBatchProtocol, Protocol):
     weight: np.ndarray | torch.Tensor
 
 
+class RolloutWithMCReturnBatchProtocol(RolloutBatchProtocol):
+    mc_return: np.ndarray
+    full_episode_mc_return: np.ndarray
+
+
 class RecurrentStateBatch(BatchProtocol, Protocol):
     """Used by RNNs in policies, contains `hidden` and `cell` fields."""
 
