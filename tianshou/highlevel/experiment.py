@@ -28,6 +28,7 @@ from tianshou.highlevel.agent import (
     TD3AgentFactory,
     TRPOAgentFactory,
 )
+from tianshou.highlevel.collector import CollectorCallbacks
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import EnvFactory
 from tianshou.highlevel.logger import LoggerFactory, LoggerFactoryDefault, TLogger
@@ -391,6 +392,7 @@ class ExperimentBuilder:
         self._optim_factory: OptimizerFactory | None = None
         self._policy_wrapper_factory: PolicyWrapperFactory | None = None
         self._trainer_callbacks: TrainerCallbacks = TrainerCallbacks()
+        self._collector_callbacks: CollectorCallbacks = CollectorCallbacks()
         self._experiment_name: str = ""
 
     @contextmanager
@@ -528,6 +530,7 @@ class ExperimentBuilder:
         """
         agent_factory = self._create_agent_factory()
         agent_factory.set_trainer_callbacks(self._trainer_callbacks)
+        agent_factory.set_collector_callbacks(self._collector_callbacks)
         if self._policy_wrapper_factory:
             agent_factory.set_policy_wrapper_factory(self._policy_wrapper_factory)
         experiment: Experiment = Experiment(
