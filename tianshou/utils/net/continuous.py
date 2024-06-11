@@ -158,11 +158,11 @@ class Critic(CriticBase):
         info: dict[str, Any] | None = None,
     ) -> torch.Tensor:
         """Mapping: (s_B, a_B) -> Q(s, a)_B."""
-        obs = torch.as_tensor(
-            obs,
-            device=self.device,
-            dtype=torch.float32,
-        )
+        # obs = torch.as_tensor(
+        #     obs,
+        #     device=self.device,
+        #     dtype=torch.float32,
+        # )
         if self.apply_preprocess_net_to_obs_only:
             obs, _ = self.preprocess(obs)
         obs = obs.flatten(1)
