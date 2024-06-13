@@ -232,3 +232,11 @@ class PGPolicy(BasePolicy[TPGTrainingStats], Generic[TPGTrainingStats]):
         loss_summary_stat = SequenceSummaryStats.from_sequence(losses)
 
         return PGTrainingStats(loss=loss_summary_stat)  # type: ignore[return-value]
+
+    def get_ret_rms(self) -> RunningMeanStd:
+        """Return return running mean/std."""
+        return self.ret_rms
+
+    def set_ret_rms(self, ret_rms: RunningMeanStd) -> None:
+        """Set with given return running mean/std."""
+        self.ret_rms = ret_rms
