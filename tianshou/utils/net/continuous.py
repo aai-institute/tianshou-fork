@@ -165,7 +165,14 @@ class Critic(CriticBase):
         # )
         if self.apply_preprocess_net_to_obs_only:
             obs, _ = self.preprocess(obs)
-        obs = obs.flatten(1)
+        # flatten last dimensions
+        # TODO: commit to tianshou!
+        obs = obs.reshape(obs.shape[0], -1)
+        obs = torch.as_tensor(
+            obs,
+            device=self.device,
+            dtype=torch.float32,
+        )
         if act is not None:
             act = torch.as_tensor(
                 act,
