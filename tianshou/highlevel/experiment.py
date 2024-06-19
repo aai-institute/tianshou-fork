@@ -26,9 +26,9 @@ from tianshou.highlevel.agent import (
     REDQAgentFactory,
     SACAgentFactory,
     TD3AgentFactory,
-    TRPOAgentFactory,
+    TRPOAgentFactory, PolicyRetRmsPersistence,
 )
-from tianshou.highlevel.collector import CollectorCallbacks
+from tianshou.highlevel.collector import CollectorCallbacks, CustomCollectStatsAndCallback
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import EnvFactory
 from tianshou.highlevel.logger import LoggerFactory, LoggerFactoryDefault, TLogger
@@ -239,16 +239,6 @@ class Experiment(ToStringMixin):
             )
             log.info(f"Created {envs}")
 
-            # initialize persistence
-            additional_persistence = PersistenceGroup(*envs.persistence, enabled=use_persistence)
-            policy_persistence = PolicyPersistence(
-                additional_persistence,
-                enabled=use_persistence,
-                mode=self.config.policy_persistence_mode,
-            )
-            if use_persistence:
-                log.info(f"Persistence directory: {os.path.abspath(persistence_dir)}")
-                self.save(persistence_dir)
 
             # initialize logger
             full_config = self._build_config_dict()
@@ -272,6 +262,23 @@ class Experiment(ToStringMixin):
             # create policy and collectors
             log.info("Creating policy")
             policy = self.agent_factory.create_policy(envs, self.config.device)
+
+            # initialize persistence
+            if getattr(policy, 'rew_norm', False):
+                additional_ret_rms_persistence = [PolicyRetRmsPersistence()]
+            else:
+                additional_ret_rms_persistence = []
+
+            additional_persistence = PersistenceGroup(*envs.persistence, *additional_ret_rms_persistence,
+                                                      enabled=use_persistence)
+            policy_persistence = PolicyPersistence(
+                additional_persistence,
+                enabled=use_persistence,
+                mode=self.config.policy_persistence_mode,
+            )
+            if use_persistence:
+                log.info(f"Persistence directory: {os.path.abspath(persistence_dir)}")
+                self.save(persistence_dir)
             log.info("Creating collectors")
             train_collector, test_collector = self.agent_factory.create_train_test_collector(
                 policy,
@@ -392,7 +399,7 @@ class ExperimentBuilder:
         self._optim_factory: OptimizerFactory | None = None
         self._policy_wrapper_factory: PolicyWrapperFactory | None = None
         self._trainer_callbacks: TrainerCallbacks = TrainerCallbacks()
-        self._collector_callbacks: CollectorCallbacks = CollectorCallbacks()
+        self._collect_stats_and_callbacks: CollectorCallbacks = CollectorCallbacks()
         self._experiment_name: str = ""
 
     @contextmanager
@@ -496,6 +503,10 @@ class ExperimentBuilder:
         self._trainer_callbacks.epoch_stop_callback = callback
         return self
 
+    def with_collect_stats(self, collect_stats_and_callback: CustomCollectStatsAndCallback):
+        self._collect_stats_and_callbacks.collect_stat_and_callback = collect_stats_and_callback
+        return self
+
     def with_experiment_name(
         self,
         experiment_name: str | Literal["DATETIME_TAG"] = "DATETIME_TAG",
@@ -530,7 +541,7 @@ class ExperimentBuilder:
         """
         agent_factory = self._create_agent_factory()
         agent_factory.set_trainer_callbacks(self._trainer_callbacks)
-        agent_factory.set_collector_callbacks(self._collector_callbacks)
+        agent_factory.set_collect_stats_and_callbacks(self._collect_stats_and_callbacks)
         if self._policy_wrapper_factory:
             agent_factory.set_policy_wrapper_factory(self._policy_wrapper_factory)
         experiment: Experiment = Experiment(

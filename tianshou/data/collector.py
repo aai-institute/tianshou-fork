@@ -22,7 +22,7 @@ from tianshou.data import (
     to_numpy,
 )
 from tianshou.data.batch import get_sliced_dist
-from tianshou.data.callbacks import CollectorCallbacks
+from tianshou.data.callbacks import CollectCallbacks
 from tianshou.data.types import (
     ActBatchProtocol,
     CollectActionComputationBatchProtocol,
@@ -188,7 +188,8 @@ class BaseCollector(ABC):
         env: BaseVectorEnv | gym.Env,
         buffer: ReplayBuffer | None = None,
         exploration_noise: bool = False,
-        custom_collect_stats: type[CollectStats] | None = None,
+        callbacks: CollectCallbacks | None = None,
+        collect_stats: type[CollectStats] | None = None,
     ) -> None:
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
             warnings.warn("Single environment detected, wrap to DummyVectorEnv.")
@@ -202,7 +203,8 @@ class BaseCollector(ABC):
         self.policy = policy
         self.env = cast(BaseVectorEnv, env)
         self.exploration_noise = exploration_noise
-        self.collect_stats = custom_collect_stats if custom_collect_stats is not None else CollectStats
+        self.callbacks = callbacks if callbacks is not None else CollectCallbacks()
+        self.collect_stats = collect_stats if collect_stats is not None else CollectStats
         self.collect_step, self.collect_episode, self.collect_time = 0, 0, 0.0
 
         self._action_space = self.env.action_space
@@ -376,7 +378,8 @@ class BaseCollector(ABC):
                 gym_reset_kwargs=gym_reset_kwargs,
             )
 
-            stats.add_stats_from_buffer(self.buffer)
+        self.callbacks.run_on_collect_end(self.buffer)
+        stats.add_stats_from_buffer(self.buffer)
 
         return stats
 
@@ -428,8 +431,8 @@ class Collector(BaseCollector):
         env: gym.Env | BaseVectorEnv,
         buffer: ReplayBuffer | None = None,
         exploration_noise: bool = False,
-        callbacks: CollectorCallbacks = CollectorCallbacks(),
-        custom_collect_stats: type[CollectStats] | None = None,
+        callbacks: CollectCallbacks = CollectCallbacks(),
+        collect_stats: type[CollectStats] = CollectStats,
         # on_episode_done_hook: EpisodeRolloutHook
         # | Callable[[RolloutBatchProtocol], dict[str, np.ndarray]]
         # | None = None,
@@ -463,13 +466,12 @@ class Collector(BaseCollector):
             rollout batch that will be added to the buffer.
         """
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise,
-                         custom_collect_stats=custom_collect_stats)
+                         callbacks=callbacks, collect_stats=collect_stats)
         self._pre_collect_obs_RO: np.ndarray | None = None
         self._pre_collect_info_R: np.ndarray | None = None
         self._pre_collect_hidden_state_RH: np.ndarray | torch.Tensor | Batch | None = None
 
         self._is_closed = False
-        self.callbacks = callbacks
         # self.collect_stats = custom_collect_stats if custom_collect_stats is not None else CollectStats
         # self.on_episode_done_hook = on_episode_done_hook
         # self.on_step_hook = on_step_hook

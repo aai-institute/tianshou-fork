@@ -5,9 +5,9 @@ from typing import Callable, Protocol
 import numpy as np
 import torch
 
-from tianshou.data import to_numpy
+from tianshou.data import to_numpy, ReplayBuffer
 from tianshou.data.types import RolloutBatchProtocol, CollectActionComputationBatchProtocol, DistBatchProtocol
-from tianshou.policy.base import episode_mc_return, BasePolicy, _gae_return
+from tianshou.policy.base import episode_mc_return, _gae_return
 from tianshou.utils.net.continuous import Critic
 
 
@@ -134,7 +134,9 @@ class EpisodeHookAddValuesFromContinuousCritic(EpisodeRolloutHook):
         self.ret_rms = ret_rms
         self._eps = 1e-8
 
-    def __call__(self, rollout_batch: RolloutBatchProtocol) -> dict[str, np.ndarray]:
+    # TODO: WIP
+    def __call__(self, buffer: ReplayBuffer) -> dict[str, np.ndarray]:
+        batch, indices = buffer.sample(sample_size)
         v_s, v_s_ = [], []
         with torch.no_grad():
             for minibatch in rollout_batch.split(self.batchsize, shuffle=False, merge_last=True):
@@ -153,7 +155,7 @@ class EpisodeHookAddValuesFromContinuousCritic(EpisodeRolloutHook):
 
         rew = rollout_batch.rew
         end_flag = np.logical_or(rollout_batch.terminated, rollout_batch.truncated)
-        # end_flag[np.isin(indices, buffer.unfinished_index())] = True
+        end_flag[np.isin(indices, buffer.unfinished_index())] = True
         advantage = _gae_return(v_s, v_s_, rew, end_flag, self.gamma, self.gae_lambda)
         unnormalized_returns = advantage + v_s
         if self.rew_norm:
@@ -181,11 +183,12 @@ class HookFilterEpisodeRolloutMCReturn(EpisodeRolloutHook):
 
 
 @dataclass
-class CollectorCallbacks:
+class CollectCallbacks:
     """Container for callbacks used during collection."""
 
     episode_done_callback: EpisodeRolloutHook | Callable[[RolloutBatchProtocol], dict[str, np.ndarray]] | None = None
     step_callback: StepHook | Callable[[RolloutBatchProtocol, DistBatchProtocol], dict[str, np.ndarray]] | None = None
+    collect_end_callback: Callable[[RolloutBatchProtocol], None] | None = None
 
     def run_on_episode_done(
         self,
@@ -217,3 +220,7 @@ class CollectorCallbacks:
                         key,
                     )
         return None
+
+    def run_on_collect_end(self, rollout_batch: RolloutBatchProtocol) -> None:
+        if self.collect_end_callback is not None:
+            self.collect_end_callback(rollout_batch)

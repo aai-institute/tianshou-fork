@@ -114,10 +114,12 @@ class SamplingConfig(ToStringMixin):
     :attr:`repeat_per_collect` instead.
     """
 
-    start_timesteps: int = 0
+    start_timesteps: int | None = None
     """
     the number of environment steps to collect before the actual training loop begins
     """
+
+    start_episodes: int | None = None
 
     start_timesteps_random: bool = False
     """
@@ -165,3 +167,13 @@ class SamplingConfig(ToStringMixin):
         assert (
             sum([self.step_per_collect is not None, self.episode_per_collect is not None]) == 1
         ), ("Only one of `step_per_collect` and `episode_per_collect` can be set.",)
+
+        assert (
+            sum([self.start_timesteps is not None, self.start_episodes is not None]) <= 1
+        ), ("Only one of `start_timesteps` and `start_episodes` can be set.",)
+
+        if self.start_timesteps is None:
+            self.start_timesteps = 0
+
+        if self.start_episodes is None:
+            self.start_episodes = 0

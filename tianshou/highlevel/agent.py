@@ -1,4 +1,5 @@
 import logging
+import pickle
 import typing
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar, cast
@@ -7,7 +8,7 @@ import gymnasium
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.data.collector import BaseCollector
-from tianshou.highlevel.collector import CollectorCallbacks
+from tianshou.highlevel.collector import CollectorCallbacks, CollectorContext
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import Environments
 from tianshou.highlevel.module.actor import (
@@ -41,7 +42,7 @@ from tianshou.highlevel.params.policy_params import (
     TRPOParams,
 )
 from tianshou.highlevel.params.policy_wrapper import PolicyWrapperFactory
-from tianshou.highlevel.persistence import PolicyPersistence
+from tianshou.highlevel.persistence import PolicyPersistence, Persistence, PersistEvent, RestoreEvent
 from tianshou.highlevel.trainer import TrainerCallbacks, TrainingContext
 from tianshou.highlevel.world import World
 from tianshou.policy import (
@@ -80,6 +81,28 @@ TDiscreteCriticOnlyParams = TypeVar(
 )
 TPolicy = TypeVar("TPolicy", bound=BasePolicy)
 log = logging.getLogger(__name__)
+
+
+class PolicyRetRmsPersistence(Persistence):
+    FILENAME = "pol_ret_rms.pkl"
+
+    def persist(self, event: PersistEvent, world: World) -> None:
+        if event != PersistEvent.PERSIST_POLICY:
+            return  # type: ignore[unreachable]  # since PersistEvent has only one member, mypy infers that line is unreachable
+        ret_rms = world.policy.get_ret_rms()
+        path = world.persist_path(self.FILENAME)
+        log.info(f"Saving policy ret_rms value to {path}")
+        with open(path, "wb") as f:
+            pickle.dump(ret_rms, f)
+
+    def restore(self, event: RestoreEvent, world: World) -> None:
+        if event != RestoreEvent.RESTORE_POLICY:
+            return  # type: ignore[unreachable]
+        path = world.restore_path(self.FILENAME)
+        log.info(f"Restoring policy ret_rms value from {path}")
+        with open(path, "rb") as f:
+            ret_rms = pickle.load(f)
+        world.policy.set_ret_rms(ret_rms)
 
 
 class AgentFactory(ABC, ToStringMixin):
@@ -123,21 +146,35 @@ class AgentFactory(ABC, ToStringMixin):
                 ignore_obs_next=self.sampling_config.replay_buffer_ignore_obs_next,
             )
 
-        callbacks = self.collector_callbacks
-        # on_step_hook = callbacks.on_step_hook.get_collector_fn() if callbacks.on_step_hook else None
+        context = CollectorContext(policy=policy)
+        collect_stat_and_callback = self.collector_callbacks.collect_stat_and_callback
+        if collect_stat_and_callback is not None:
+            collect_callbacks = collect_stat_and_callback.get_collect_callbacks(context=context)
+            collect_stats = collect_stat_and_callback.get_collect_stats()
+        else:
+            collect_callbacks = None
+            collect_stats = None
 
-        train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
+        train_collector = Collector(policy, train_envs, buffer, exploration_noise=True,
+                                    callbacks=collect_callbacks,
+                                    collect_stats=collect_stats)
         test_collector = Collector(policy, envs.test_envs)
         if reset_collectors:
             train_collector.reset()
             test_collector.reset()
 
-        if self.sampling_config.start_timesteps > 0:
-            log.info(
-                f"Collecting {self.sampling_config.start_timesteps} initial environment steps before training (random={self.sampling_config.start_timesteps_random})",
-            )
+        if self.sampling_config.start_timesteps > 0 or self.sampling_config.start_episodes > 0:
+            if self.sampling_config.start_timesteps > 0:
+                log.info(
+                    f"Collecting {self.sampling_config.start_timesteps} initial environment steps before training (random={self.sampling_config.start_timesteps_random})",
+                )
+            else:
+                log.info(
+                    f"Collecting {self.sampling_config.start_episodes} initial episodes before training (random={self.sampling_config.start_timesteps_random})",
+                )
             train_collector.collect(
                 n_step=self.sampling_config.start_timesteps,
+                n_episode=self.sampling_config.start_episodes,
                 random=self.sampling_config.start_timesteps_random,
             )
         return train_collector, test_collector
@@ -151,7 +188,7 @@ class AgentFactory(ABC, ToStringMixin):
     def set_trainer_callbacks(self, callbacks: TrainerCallbacks) -> None:
         self.trainer_callbacks = callbacks
 
-    def set_collector_callbacks(self, callbacks: CollectorCallbacks) -> None:
+    def set_collect_stats_and_callbacks(self, callbacks: CollectorCallbacks) -> None:
         self.collector_callbacks = callbacks
 
     @abstractmethod
@@ -251,6 +288,7 @@ class OffPolicyAgentFactory(AgentFactory, ABC):
             max_epoch=sampling_config.num_epochs,
             step_per_epoch=sampling_config.step_per_epoch,
             step_per_collect=sampling_config.step_per_collect,
+            episode_per_collect=sampling_config.episode_per_collect,
             episode_per_test=sampling_config.num_test_episodes,
             batch_size=sampling_config.batch_size,
             save_best_fn=policy_persistence.get_save_best_fn(world),
