@@ -108,7 +108,7 @@ class CollectStatsWithGAEReturn(CustomCollectStatsAndCallback):
 @dataclass
 class CollectorCallbacks:
     """Callbacks to be called at various points during the collection phase of an epoch."""
-    collect_stat_and_callback: CustomCollectStatsAndCallback | None = Non
+    collect_stat_and_callback: CustomCollectStatsAndCallback | None = None
 
 
 # class OnStepCallbackGetActionDistribution(OnStepCallback):
