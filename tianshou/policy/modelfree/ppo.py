@@ -25,7 +25,7 @@ class PPOTrainingStats(TrainingStats):
     vf_loss: SequenceSummaryStats
     ent_loss: SequenceSummaryStats
     # ratio: SequenceSummaryStats
-    # advantage: SequenceSummaryStats
+    advantage: SequenceSummaryStats
     gradient_steps: int = 0
 
     @classmethod
@@ -37,7 +37,7 @@ class PPOTrainingStats(TrainingStats):
         vf_losses: Sequence[float],
         ent_losses: Sequence[float],
         # ratios: Sequence[float],
-        # advantages: Sequence[float],
+        advantages: Sequence[float],
         gradient_steps: int = 0,
     ) -> Self:
         return cls(
@@ -46,7 +46,7 @@ class PPOTrainingStats(TrainingStats):
             vf_loss=SequenceSummaryStats.from_sequence(vf_losses),
             ent_loss=SequenceSummaryStats.from_sequence(ent_losses),
             # ratio=SequenceSummaryStats.from_sequence(ratios),
-            # advantage=SequenceSummaryStats.from_sequence(advantages),
+            advantage=SequenceSummaryStats.from_sequence(advantages),
             gradient_steps=gradient_steps,
         )
 
@@ -181,7 +181,7 @@ class PPOPolicy(A2CPolicy[TPPOTrainingStats], Generic[TPPOTrainingStats]):  # ty
         self.train()
 
         losses, clip_losses, vf_losses, ent_losses = [], [], [], []
-        ratios, advantages = [], []
+        ratios, advantages_all = [], []
         gradient_steps = 0
         split_batch_size = batch_size or -1
         for step in range(repeat):
@@ -191,6 +191,7 @@ class PPOPolicy(A2CPolicy[TPPOTrainingStats], Generic[TPPOTrainingStats]):  # ty
                 gradient_steps += 1
                 # calculate loss for actor
                 advantages = minibatch.adv
+                advantages_all.extend(advantages.cpu().numpy())
                 dist = self(minibatch).dist
                 if self.norm_adv:
                     mean, std = advantages.mean(), advantages.std()
@@ -239,6 +240,6 @@ class PPOPolicy(A2CPolicy[TPPOTrainingStats], Generic[TPPOTrainingStats]):  # ty
             vf_losses=vf_losses,
             ent_losses=ent_losses,
             # ratios=ratios,
-            # advantages=advantages,
+            advantages=advantages_all,
             gradient_steps=gradient_steps,
         )
