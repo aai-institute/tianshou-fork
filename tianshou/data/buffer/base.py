@@ -245,9 +245,6 @@ class ReplayBuffer:
         2. the episode return (if done=True, otherwise 0)
         3. the episode start index.
         """
-        if done and self._insertion_idx == 1999:
-            print("done")
-
         self.last_index[0] = cur_insertion_idx = self._insertion_idx
         self._size = min(self._size + 1, self.maxsize)
         self._insertion_idx = (self._insertion_idx + 1) % self.maxsize
