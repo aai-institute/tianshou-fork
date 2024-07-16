@@ -2,7 +2,6 @@ import logging
 import time
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass
 from typing import Any, Self, TypeVar, cast
@@ -36,34 +35,6 @@ from tianshou.utils.print import DataclassPPrintMixin
 from tianshou.utils.torch_utils import in_eval_mode, in_train_mode
 
 log = logging.getLogger(__name__)
-
-
-def bisect_left(arr: np.ndarray, x: float) -> Any:
-    """Assuming arr is sorted, return the largest element el of arr s.t. el < x."""
-    el_index = np.searchsorted(arr, x, side="left") - 1
-    return arr[el_index]
-
-
-def bisect_right(arr: np.ndarray, x: float) -> Any:
-    """Assuming arr is sorted, return the smallest element el of arr s.t. el > x."""
-    el_index = np.searchsorted(arr, x, side="right")
-    return arr[el_index]
-
-
-def get_start_stop_tuples_around_edges(
-    edges: np.ndarray | Sequence[int],
-    start: int,
-    stop: int,
-) -> tuple[tuple[int, int], tuple[int, int]]:
-    """We assume that stop is smaller than start and that edges is a sorted array of integers.
-
-    Then it will return the two tuples containig (start, stop) where we go from start to the next edge,
-    and from the previous edge to stop.
-    :return: (start, upper_edge), (lower_edge, stop)
-    """
-    upper_edge = int(bisect_right(edges, start))
-    lower_edge = int(bisect_left(edges, stop))
-    return (start, upper_edge), (lower_edge, stop)
 
 
 @dataclass(kw_only=True)
@@ -212,25 +183,6 @@ class BaseCollector(ABC):
 
         self._validate_buffer()
 
-    @property
-    def _subbuffer_edges(self):
-        return self.buffer.subbuffer_edges
-
-    def _get_start_stop_tuples_for_edge_crossing_interval(
-        self,
-        start: int,
-        stop: int,
-    ) -> tuple[tuple[int, int], tuple[int, int]]:
-        """:return: (start, upper_edge), (lower_edge, stop)"""
-        log.debug(
-            "Received an edge-crossing episode: {start=}, {stop=}, {self._subbuffer_edges=}",
-        )
-        if stop >= start:
-            raise ValueError(
-                f"Expected stop < start, but got {start=}, {stop=}. "
-                f"For stop larger than start this should never be used, and stop=start should never occur.",
-            )
-        return get_start_stop_tuples_around_edges(self._subbuffer_edges, start, stop)
 
     def _validate_buffer(self) -> None:
         buf = self.buffer
@@ -378,6 +330,7 @@ class BaseCollector(ABC):
                 gym_reset_kwargs=gym_reset_kwargs,
             )
 
+        # TODO: run on collect is wip
         self.callbacks.run_on_collect_end(self.buffer)
         stats.add_stats_from_buffer(self.buffer)
 
@@ -472,30 +425,12 @@ class Collector(BaseCollector):
         self._pre_collect_hidden_state_RH: np.ndarray | torch.Tensor | Batch | None = None
 
         self._is_closed = False
-        # self.collect_stats = custom_collect_stats if custom_collect_stats is not None else CollectStats
-        # self.on_episode_done_hook = on_episode_done_hook
-        # self.on_step_hook = on_step_hook
         self.collect_step, self.collect_episode, self.collect_time = 0, 0, 0.0
 
     def close(self) -> None:
         super().close()
         self._pre_collect_obs_RO = None
         self._pre_collect_info_R = None
-
-    def run_on_episode_done(
-        self,
-        episode_batch: RolloutBatchProtocol,
-    ) -> dict[str, np.ndarray] | None:
-        """Executes the `on_episode_done_hook` that was passed on init.
-
-        The raison d'être of this method is to allow for a cleaner implementation
-        of the hook for users who want to subclass the Collector. These users can
-        then override this method and also override the init to no longer accept
-        the `on_episode_done_hook` provider.
-        """
-        if self.callbacks.episode_done_callback is not None:
-            return self.callbacks.episode_done_callback(episode_batch)
-        return None
 
     def reset_env(
         self,
@@ -687,16 +622,6 @@ class Collector(BaseCollector):
             # TODO: make more general, maybe like sb3 with locals()?
             self.callbacks.run_on_step(current_iteration_batch, collect_action_computation_batch)
 
-            # step_hook_additions = self.run_on_step_hook(
-            #     current_iteration_batch,
-            #     collect_action_computation_batch,
-            # )
-            # if step_hook_additions is not None:
-            #     for key, array in step_hook_additions.items():
-            #         current_iteration_batch.set_array_at_key(
-            #             array,
-            #             key,
-            #         )
             # add data into the buffer
             insertion_idx_R, ep_return_R, ep_len_R, ep_start_idx_R = self.buffer.add(
                 current_iteration_batch,
@@ -744,26 +669,10 @@ class Collector(BaseCollector):
                 #  this complex logic
                 self._reset_hidden_state_based_on_type(env_done_local_idx_D, last_hidden_state_RH)
 
-                # self.callbacks.run_on_episode_done(self) TODO: outsource this to the callback
                 for local_done_idx in env_done_local_idx_D:
-                    cur_ep_index_slice = slice(
-                        ep_start_idx_R[local_done_idx],
-                        insertion_idx_R[local_done_idx] + 1,
-                    )
-
-                    cur_ep_index_array, ep_rollout_batch = self._get_buffer_index_and_entries(
-                        cur_ep_index_slice,
-                    )
-                    if len(ep_rollout_batch) > 1000:
-                        raise RuntimeError("bug")
-                    episode_hook_additions = self.run_on_episode_done(ep_rollout_batch)
-                    if episode_hook_additions is not None:
-                        for key, array in episode_hook_additions.items():
-                            self.buffer.set_array_at_key(
-                                array,
-                                key,
-                                index=cur_ep_index_array,
-                            )
+                    self.callbacks.run_on_episode_done(self.buffer,
+                                                       ep_start_idx_R[local_done_idx],
+                                                       insertion_idx_R[local_done_idx] + 1)
 
                 # preparing for the next iteration
                 last_obs_RO[env_done_local_idx_D] = obs_reset_DO
@@ -840,37 +749,6 @@ class Collector(BaseCollector):
             collect_time=collect_time,
             collect_speed=step_count / collect_time,
         )
-
-    # TODO: move to buffer
-    def _get_buffer_index_and_entries(
-        self,
-        entries_slice: slice,
-    ) -> tuple[np.ndarray, RolloutBatchProtocol]:
-        """:param entries_slice: a slice object that selects the entries from the buffer.
-        stop can be smaller than start, meaning that a sub-buffer edge is to be crossed
-        :return: The indices of the entries in the buffer and the corresponding batch of entries.
-        """
-        start, stop = entries_slice.start, entries_slice.stop
-        if stop > start:
-            cur_ep_index_array = np.arange(
-                entries_slice.start,
-                entries_slice.stop,
-                dtype=int,
-            )
-        else:
-            (start, upper_edge), (
-                lower_edge,
-                stop,
-            ) = self._get_start_stop_tuples_for_edge_crossing_interval(
-                start,
-                stop,
-            )
-            cur_ep_index_array = np.concatenate(
-                (np.arange(start, upper_edge, dtype=int), np.arange(lower_edge, stop, dtype=int)),
-            )
-            log.debug(f"{start=}, {upper_edge=}, {lower_edge=}, {stop=}")
-        ep_rollout_batch = cast(RolloutBatchProtocol, self.buffer[cur_ep_index_array])
-        return cur_ep_index_array, ep_rollout_batch
 
     def _reset_hidden_state_based_on_type(
         self,

@@ -436,6 +436,7 @@ def test_herreplaybuffer(size: int = 10, bufsize: int = 100, sample_sz: int = 4)
         tmp_indices = buf2.next(tmp_indices)
 
     # Test handling cycled indices
+    # TODO: Currently "broken" by design. Manually shifting the insertion index raises MalformedBufferError.
     env_size = size
     bufsize = 15
     env = MyGoalEnv(env_size, array_state=False)

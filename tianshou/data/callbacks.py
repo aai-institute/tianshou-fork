@@ -192,7 +192,9 @@ class CollectCallbacks:
 
     def run_on_episode_done(
         self,
-        episode_batch: RolloutBatchProtocol,
+        buffer: ReplayBuffer,
+        ep_start_idx: int,
+        ep_end_idx: int,
     ) -> dict[str, np.ndarray] | None:
         """Executes the `on_episode_done_hook` that was passed on init.
 
@@ -202,7 +204,16 @@ class CollectCallbacks:
         the `on_episode_done_hook` provider.
         """
         if self.episode_done_callback is not None:
-            return self.episode_done_callback(episode_batch)
+            cur_ep_index_slice = slice(ep_start_idx, ep_end_idx)
+            ep_rollout_batch = buffer[cur_ep_index_slice]
+            episode_hook_additions = self.episode_done_callback(ep_rollout_batch)
+            if episode_hook_additions is not None:
+                for key, array in episode_hook_additions.items():
+                    buffer.set_array_at_key(
+                        array,
+                        key,
+                        index=cur_ep_index_slice,
+                    )
         return None
 
     def run_on_step(

@@ -1,4 +1,4 @@
-from typing import Any, Self, TypeVar, cast
+from typing import Any, Self, TypeVar, cast, Sequence
 
 import h5py
 import numpy as np
@@ -14,6 +14,34 @@ from tianshou.data.types import RolloutBatchProtocol
 from tianshou.data.utils.converter import from_hdf5, to_hdf5
 
 TBuffer = TypeVar("TBuffer", bound="ReplayBuffer")
+
+
+def bisect_left(arr: np.ndarray, x: float) -> Any:
+    """Assuming arr is sorted, return the largest element el of arr s.t. el < x."""
+    el_index = np.searchsorted(arr, x, side="left") - 1
+    return arr[el_index]
+
+
+def bisect_right(arr: np.ndarray, x: float) -> Any:
+    """Assuming arr is sorted, return the smallest element el of arr s.t. el > x."""
+    el_index = np.searchsorted(arr, x, side="right")
+    return arr[el_index]
+
+
+def get_start_stop_tuples_around_edges(
+    edges: np.ndarray | Sequence[int],
+    start: int,
+    stop: int,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """We assume that stop is smaller than start and that edges is a sorted array of integers.
+
+    Then it will return the two tuples containig (start, stop) where we go from start to the next edge,
+    and from the previous edge to stop.
+    :return: (start, upper_edge), (lower_edge, stop)
+    """
+    upper_edge = int(bisect_right(edges, start))
+    lower_edge = int(bisect_left(edges, stop))
+    return (start, upper_edge), (lower_edge, stop)
 
 
 class MalformedBufferError(RuntimeError):
@@ -91,13 +119,32 @@ class ReplayBuffer:
         self._meta = cast(RolloutBatchProtocol, Batch())
 
         # Keep in sync with reset!
-        self.last_index = np.array([0])
-        self._insertion_idx = self._size = 0
-        self._ep_return, self._ep_len, self._ep_start_idx = 0.0, 0, 0
+        # Max: Needs to call reset in __init__ to initialize these values correctly for vectorized prioritized buffers
+        # There, last_index is set from off_set.
+        self.reset()
+        # self.last_index = np.array([0])
+        # self._insertion_idx = self._size = 0
+        # self._ep_return, self._ep_len, self._ep_start_idx = 0.0, 0, 0
 
     @property
     def subbuffer_edges(self):
         return np.array([0, self.maxsize], dtype=int)
+
+    def _get_start_stop_tuples_for_edge_crossing_interval(
+        self,
+        start: int,
+        stop: int,
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
+        """:return: (start, upper_edge), (lower_edge, stop)"""
+        log.debug(
+            "Received an edge-crossing episode: {start=}, {stop=}, {self._subbuffer_edges=}",
+        )
+        if stop >= start:
+            raise ValueError(
+                f"Expected stop < start, but got {start=}, {stop=}. "
+                f"For stop larger than start this should never be used, and stop=start should never occur.",
+            )
+        return get_start_stop_tuples_around_edges(self._subbuffer_edges, start, stop)
 
     def __len__(self) -> int:
         return self._size
@@ -172,8 +219,6 @@ class ReplayBuffer:
         if not keep_statistics:
             self._ep_return, self._ep_len = 0.0, 0
 
-    # TODO: is this method really necessary? It's kinda dangerous, can accidentally
-    #  remove all references to collected data
     def set_batch(self, batch: RolloutBatchProtocol) -> None:
         """Manually choose the batch you want the ReplayBuffer to manage."""
         assert len(batch) == self.maxsize and set(batch.get_keys()).issubset(
@@ -181,6 +226,8 @@ class ReplayBuffer:
         ), "Input batch doesn't meet ReplayBuffer's data form requirement."
         self._meta = batch
 
+    # TODO: is this method really necessary? It's kinda dangerous, can accidentally
+    #  remove all references to collected data
     def unfinished_index(self) -> np.ndarray:
         """Return the index of unfinished episode."""
         last = (self._insertion_idx - 1) % self._size if self._size else 0
@@ -436,6 +483,47 @@ class ReplayBuffer:
                 raise exception  # val != Batch()
             return Batch()
 
+    def _get_buffer_indices_from_slice(
+        self,
+        entries_slice: slice,
+    ) -> np.ndarray:
+        """:param entries_slice: a slice object that selects the entries from the buffer.
+        stop can be smaller than start, meaning that a sub-buffer edge is to be crossed
+        :return: The indices of the entries in the buffer and the corresponding batch of entries.
+        """
+        if entries_slice == slice(None):
+            return self.sample_indices(0)
+        # indices = (
+        #     self.sample_indices(0)
+        #     if index == slice(None)
+        #     else self._indices[: len(self)][index]
+        # )
+
+        # TODO: check if this handles indices correctly that are larger than len(self)
+        start, stop = entries_slice.start, entries_slice.stop
+        if start is None:
+            start = 0
+        if stop > start:
+            indices = self._indices[: len(self)][entries_slice]
+            # indices = np.arange(
+            #     entries_slice.start,
+            #     entries_slice.stop,
+            #     dtype=int,
+            # )
+        else:
+            (start, upper_edge), (
+                lower_edge,
+                stop,
+            ) = self._get_start_stop_tuples_for_edge_crossing_interval(
+                start,
+                stop,
+            )
+            indices = np.concatenate(
+                (np.arange(start, upper_edge, dtype=int), np.arange(lower_edge, stop, dtype=int)),
+            )
+            log.debug(f"{start=}, {upper_edge=}, {lower_edge=}, {stop=}")
+        return indices
+
     def __getitem__(self, index: IndexType) -> RolloutBatchProtocol:
         """Return a data batch: self[index].
 
@@ -447,11 +535,12 @@ class ReplayBuffer:
         # Fix asap, high priority!!!
         if isinstance(index, slice):  # change slice to np array
             # buffer[:] will get all available data
-            indices = (
-                self.sample_indices(0)
-                if index == slice(None)
-                else self._indices[: len(self)][index]
-            )
+            # indices = (
+            #     self.sample_indices(0)
+            #     if index == slice(None)
+            #     else self._indices[: len(self)][index]
+            # )
+            indices = self._get_buffer_indices_from_slice(entries_slice=index)
         else:
             indices = index  # type: ignore
         # raise KeyError first instead of AttributeError,
@@ -489,6 +578,8 @@ class ReplayBuffer:
         index: IndexType | None = None,
         default_value: float | None = None,
     ) -> None:
+        if isinstance(index, slice):  # change slice to np array
+            index = self._get_buffer_indices_from_slice(entries_slice=index)
         self._meta.set_array_at_key(seq, key, index, default_value)
 
     def hasnull(self) -> bool:
