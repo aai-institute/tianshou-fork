@@ -504,12 +504,13 @@ class ReplayBuffer:
         if start is None:
             start = 0
         if stop > start:
-            indices = self._indices[: len(self)][entries_slice]
-            # indices = np.arange(
-            #     entries_slice.start,
-            #     entries_slice.stop,
-            #     dtype=int,
-            # )
+            # TODO: when is [: len(self)] necessary?
+            # indices = self._indices[: len(self)][entries_slice]
+            indices = np.arange(
+                entries_slice.start,
+                entries_slice.stop,
+                dtype=int,
+            )
         else:
             (start, upper_edge), (
                 lower_edge,
