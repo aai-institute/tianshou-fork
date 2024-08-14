@@ -111,13 +111,14 @@ from tianshou.highlevel.world import World
 from tianshou.policy import BasePolicy
 from tianshou.utils import LazyLogger
 from tianshou.utils.net.common import ModuleType
+from tianshou.utils.print import DataclassPPrintMixin
 from tianshou.utils.warning import deprecation
 
 log = logging.getLogger(__name__)
 
 
 @dataclass
-class ExperimentConfig:
+class ExperimentConfig(DataclassPPrintMixin):
     """Generic config for setting up the experiment, not RL or training specific."""
 
     seed: int = 42
@@ -334,11 +335,14 @@ class Experiment(ToStringMixin):
             log.info("Creating policy")
             policy = self.agent_factory.create_policy(envs, self.config.device)
             log.info("Creating collectors")
-            train_collector, test_collector = self.agent_factory.create_train_test_collector(
-                policy,
-                envs,
-                reset_collectors=reset_collectors,
-            )
+            if self.config.train:
+                train_collector, test_collector = self.agent_factory.create_train_test_collector(
+                    policy,
+                    envs,
+                    reset_collectors=reset_collectors,
+                )
+            else:
+                train_collector = test_collector = None
 
             # create context object with all relevant instances (except trainer; added later)
             world = World(
