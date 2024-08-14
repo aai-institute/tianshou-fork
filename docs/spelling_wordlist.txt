@@ -270,4 +270,15 @@ v_s
 v_s_
 obs
 obs_next
-
+dtype
+iqm
+kwarg
+entrypoint
+interquantile
+init
+kwarg
+kwargs
+autocompletion
+codebase
+indexable
+sliceable

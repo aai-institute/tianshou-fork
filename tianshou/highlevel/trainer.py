@@ -4,10 +4,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar, cast
 
+from sensai.util.string import ToStringMixin
+
 from tianshou.highlevel.env import Environments
 from tianshou.highlevel.logger import TLogger
 from tianshou.policy import BasePolicy, DQNPolicy
-from tianshou.utils.string import ToStringMixin
 
 TPolicy = TypeVar("TPolicy", bound=BasePolicy)
 log = logging.getLogger(__name__)
@@ -135,8 +136,9 @@ class EpochStopCallbackRewardThreshold(EpochStopCallback):
     """
 
     def __init__(self, threshold: float | None = None):
-        """:param threshold: the reward threshold beyond which to stop training.
-        If it is None, use threshold given by the environment, i.e. `env.spec.reward_threshold`.
+        """
+        :param threshold: the reward threshold beyond which to stop training.
+            If it is None, will use threshold specified by the environment, i.e. `env.spec.reward_threshold`.
         """
         self.threshold = threshold
 

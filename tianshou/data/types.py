@@ -4,13 +4,9 @@ import numpy as np
 import torch
 
 from tianshou.data import Batch
-from tianshou.data.batch import BatchProtocol, arr_type
+from tianshou.data.batch import BatchProtocol, TArr
 
 TNestedDictValue = np.ndarray | dict[str, "TNestedDictValue"]
-
-
-d: dict[str, TNestedDictValue] = {"a": {"b": np.array([1, 2, 3])}}
-d["c"] = np.array([1, 2, 3])
 
 
 class ObsBatchProtocol(BatchProtocol, Protocol):
@@ -19,24 +15,24 @@ class ObsBatchProtocol(BatchProtocol, Protocol):
     Typically used inside a policy's forward
     """
 
-    obs: arr_type | BatchProtocol
-    info: arr_type
+    obs: TArr | BatchProtocol
+    info: TArr | BatchProtocol
 
 
 class RolloutBatchProtocol(ObsBatchProtocol, Protocol):
     """Typically, the outcome of sampling from a replay buffer."""
 
-    obs_next: arr_type | BatchProtocol
-    act: arr_type
+    obs_next: TArr | BatchProtocol
+    act: TArr
     rew: np.ndarray
-    terminated: arr_type
-    truncated: arr_type
+    terminated: TArr
+    truncated: TArr
 
 
 class BatchWithReturnsProtocol(RolloutBatchProtocol, Protocol):
     """With added returns, usually computed with GAE."""
 
-    returns: arr_type
+    returns: TArr
 
 
 class PrioBatchProtocol(RolloutBatchProtocol, Protocol):
@@ -55,13 +51,15 @@ class RecurrentStateBatch(BatchProtocol, Protocol):
 class ActBatchProtocol(BatchProtocol, Protocol):
     """Simplest batch, just containing the action. Useful e.g., for random policy."""
 
-    act: arr_type
+    act: TArr
 
 
 class ActStateBatchProtocol(ActBatchProtocol, Protocol):
     """Contains action and state (which can be None), useful for policies that can support RNNs."""
 
     state: dict | BatchProtocol | np.ndarray | None
+    """Hidden state of RNNs, or None if not using RNNs. Used for recurrent policies.
+     At the moment support for recurrent is experimental!"""
 
 
 class ModelOutputBatchProtocol(ActStateBatchProtocol, Protocol):
@@ -121,7 +119,7 @@ class QuantileRegressionBatchProtocol(ModelOutputBatchProtocol, Protocol):
 
 
 class ImitationBatchProtocol(ActBatchProtocol, Protocol):
-    """Similar to other batches, but contains imitation_logits and q_value fields."""
+    """Similar to other batches, but contains `imitation_logits` and `q_value` fields."""
 
     state: dict | Batch | np.ndarray | None
     q_value: torch.Tensor

@@ -8,6 +8,8 @@ from typing import Any, TypeAlias, cast
 import gymnasium as gym
 import gymnasium.spaces
 from gymnasium import Env
+from sensai.util.pickle import setstate
+from sensai.util.string import ToStringMixin
 
 from tianshou.env import (
     BaseVectorEnv,
@@ -17,7 +19,6 @@ from tianshou.env import (
 )
 from tianshou.highlevel.persistence import Persistence
 from tianshou.utils.net.common import TActionShape
-from tianshou.utils.string import ToStringMixin
 
 TObservationShape: TypeAlias = int | Sequence[int]
 
@@ -361,11 +362,11 @@ class EnvPoolFactory:
 
 
 class EnvFactory(ToStringMixin, ABC):
-    """Main interface for the creation of environments (in various forms)."""
-
     def __init__(self, venv_type: VectorEnvType):
-        """:param venv_type: the type of vectorized environment to use for train and test environments.
-        watch environments are always created as dummy environments.
+        """Main interface for the creation of environments (in various forms).
+
+        :param venv_type: the type of vectorized environment to use for train and test environments.
+            `WATCH` environments are always created as `DUMMY` vector environments.
         """
         self.venv_type = venv_type
 
@@ -377,7 +378,8 @@ class EnvFactory(ToStringMixin, ABC):
         """Create vectorized environments.
 
         :param num_envs: the number of environments
-        :param mode: the mode for which to create. In `WATCH` mode the resulting venv will always be of type `DUMMY` with a single env.
+        :param mode: the mode for which to create.
+            In `WATCH` mode the resulting venv will always be of type `DUMMY` with a single env.
 
         :return: the vectorized environments
         """
@@ -437,9 +439,7 @@ class EnvFactoryRegistered(EnvFactory):
         :param render_mode_train: the render mode to use for training environments
         :param render_mode_test: the render mode to use for test environments
         :param render_mode_watch: the render mode to use for environments that are used to watch agent performance
-        :param make_kwargs: additional keyword arguments to pass on to `gymnasium.make`.
-            If envpool is used, the gymnasium parameters will be appropriately translated for use with
-            `envpool.make_gymnasium`.
+        :param make_kwargs: additional keyword arguments to pass on to `gymnasium.make`. If envpool is used, the gymnasium parameters will be appropriately translated for use with `envpool.make_gymnasium`.
         """
         super().__init__(venv_type)
         self.task = task
@@ -452,6 +452,19 @@ class EnvFactoryRegistered(EnvFactory):
             EnvMode.WATCH: render_mode_watch,
         }
         self.make_kwargs = make_kwargs
+
+    def __setstate__(self, state: dict) -> None:
+        if "seed" in state:
+            if "test_seed" in state or "train_seed" in state:
+                raise RuntimeError(
+                    f"Cannot have both 'seed' and 'test_seed'/'train_seed' in state. "
+                    f"Something went wrong during serialization/deserialization: "
+                    f"{state=}",
+                )
+            state["test_seed"] = state["seed"]
+            state["train_seed"] = state["seed"]
+            del state["seed"]
+        setstate(EnvFactoryRegistered, self, state)
 
     def _create_kwargs(self, mode: EnvMode) -> dict:
         """Adapts the keyword arguments for the given mode.

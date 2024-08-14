@@ -13,8 +13,11 @@ These plots are saved in the log directory and displayed in the console.
 """
 
 import os
+import warnings
 
 import torch
+from sensai.util import logging
+from sensai.util.logging import datetime_tag
 
 from examples.mujoco.mujoco_env import MujocoEnvFactory
 from tianshou.evaluation.launcher import RegisteredExpLauncher
@@ -25,29 +28,33 @@ from tianshou.highlevel.experiment import (
     PPOExperimentBuilder,
 )
 from tianshou.highlevel.logger import LoggerFactoryDefault
-from tianshou.highlevel.params.dist_fn import (
-    DistributionFunctionFactoryIndependentGaussians,
-)
 from tianshou.highlevel.params.lr_scheduler import LRSchedulerFactoryLinear
 from tianshou.highlevel.params.policy_params import PPOParams
-from tianshou.utils import logging
-from tianshou.utils.logging import datetime_tag
 
 log = logging.getLogger(__name__)
 
 
 def main(
     num_experiments: int = 5,
-    run_experiments_sequentially: bool = False,
+    run_experiments_sequentially: bool = True,
+    logger_type: str = "wandb",
 ) -> RLiableExperimentResult:
     """:param num_experiments: the number of experiments to run. The experiments differ exclusively in the seeds.
     :param run_experiments_sequentially: if True, the experiments are run sequentially, otherwise in parallel.
         If a single experiment is set to use all available CPU cores,
         it might be undesired to run multiple experiments in parallel on the same machine,
+    :param logger_type: the type of logger to use. Currently, "wandb" and "tensorboard" are supported.
     :return: an object containing rliable-based evaluation results
     """
+    if not run_experiments_sequentially and logger_type == "wandb":
+        warnings.warn(
+            "Parallel execution with wandb logger is still under development. Falling back to tensorboard.",
+        )
+        logger_type = "tensorboard"
+
     task = "Ant-v4"
-    persistence_dir = os.path.abspath(os.path.join("log", task, "ppo", datetime_tag()))
+    tag = datetime_tag()
+    persistence_dir = os.path.abspath(os.path.join("log", task, "ppo", tag))
 
     experiment_config = ExperimentConfig(persistence_base_dir=persistence_dir, watch=False)
 
@@ -72,6 +79,21 @@ def main(
 
     hidden_sizes = (64, 64)
 
+    match logger_type:
+        case "wandb":
+            job_type = f"ppo/{tag}"
+            logger_factory = LoggerFactoryDefault(
+                logger_type="wandb",
+                wandb_project="tianshou",
+                group=task,
+                job_type=job_type,
+                save_interval=1,
+            )
+        case "tensorboard":
+            logger_factory = LoggerFactoryDefault("tensorboard")
+        case _:
+            raise ValueError(f"Unknown logger type: {logger_type}")
+
     experiment_collection = (
         PPOExperimentBuilder(env_factory, experiment_config, sampling_config)
         .with_ppo_params(
@@ -90,12 +112,11 @@ def main(
                 recompute_advantage=True,
                 lr=3e-4,
                 lr_scheduler_factory=LRSchedulerFactoryLinear(sampling_config),
-                dist_fn=DistributionFunctionFactoryIndependentGaussians(),
             ),
         )
         .with_actor_factory_default(hidden_sizes, torch.nn.Tanh, continuous_unbounded=True)
         .with_critic_factory_default(hidden_sizes, torch.nn.Tanh)
-        .with_logger_factory(LoggerFactoryDefault("tensorboard"))
+        .with_logger_factory(logger_factory)
         .build_seeded_collection(num_experiments)
     )
 

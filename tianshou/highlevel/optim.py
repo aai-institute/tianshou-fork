@@ -3,9 +3,8 @@ from collections.abc import Iterable
 from typing import Any, Protocol, TypeAlias
 
 import torch
+from sensai.util.string import ToStringMixin
 from torch.optim import Adam, RMSprop
-
-from tianshou.utils.string import ToStringMixin
 
 TParams: TypeAlias = Iterable[torch.Tensor] | Iterable[dict[str, Any]]
 
@@ -45,6 +44,8 @@ class OptimizerFactoryTorch(OptimizerFactory):
 
 
 class OptimizerFactoryAdam(OptimizerFactory):
+    # Note: currently used as default optimizer
+    # values should be kept in sync with `ExperimentBuilder.with_optim_factory_default`
     def __init__(
         self,
         betas: tuple[float, float] = (0.9, 0.999),

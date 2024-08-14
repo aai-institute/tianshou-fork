@@ -10,11 +10,12 @@ import numpy as np
 import torch
 from gymnasium.spaces import Box, Discrete, MultiBinary, MultiDiscrete
 from numba import njit
+from numpy.typing import ArrayLike
 from overrides import override
 from torch import nn
 
 from tianshou.data import ReplayBuffer, SequenceSummaryStats, to_numpy, to_torch_as
-from tianshou.data.batch import Batch, BatchProtocol, arr_type
+from tianshou.data.batch import Batch, BatchProtocol, TArr
 from tianshou.data.buffer.base import TBuffer
 from tianshou.data.types import (
     ActBatchProtocol,
@@ -24,6 +25,7 @@ from tianshou.data.types import (
     RolloutBatchProtocol,
 )
 from tianshou.utils import MultipleLRSchedulers
+from tianshou.utils.net.common import RandomActor
 from tianshou.utils.print import DataclassPPrintMixin
 from tianshou.utils.torch_utils import policy_within_training_step, torch_train_mode
 
@@ -289,7 +291,7 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
 
     def compute_action(
         self,
-        obs: arr_type,
+        obs: ArrayLike,
         info: dict[str, Any] | None = None,
         state: dict | BatchProtocol | np.ndarray | None = None,
     ) -> np.ndarray | int:
@@ -300,8 +302,8 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
         :param state: the hidden state of RNN policy, used for recurrent policy.
         :return: action as int (for discrete env's) or array (for continuous ones).
         """
-        # need to add empty batch dimension
-        obs = obs[None, :]
+        obs = np.array(obs)  # convert array-like to array (e.g. LazyFrames)
+        obs = obs[None, :]  # add batch dimension
         obs_batch = cast(ObsBatchProtocol, Batch(obs=obs, info=info))
         act = self.forward(obs_batch, state=state).act.squeeze()
         if isinstance(act, torch.Tensor):
@@ -354,7 +356,7 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
         """
 
     @staticmethod
-    def _action_to_numpy(act: arr_type) -> np.ndarray:
+    def _action_to_numpy(act: TArr) -> np.ndarray:
         act = to_numpy(act)  # NOTE: to_numpy could confusingly also return a Batch
         if not isinstance(act, np.ndarray):
             raise ValueError(
@@ -364,7 +366,7 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
 
     def map_action(
         self,
-        act: arr_type,
+        act: TArr,
     ) -> np.ndarray:
         """Map raw network output to action range in gym's env.action_space.
 
@@ -399,7 +401,7 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
 
     def map_action_inverse(
         self,
-        act: arr_type,
+        act: TArr,
     ) -> np.ndarray:
         """Inverse operation to :meth:`~tianshou.policy.BasePolicy.map_action`.
 
@@ -690,6 +692,30 @@ class BasePolicy(nn.Module, Generic[TTrainingStats], ABC):
         _gae_return(f64, f64, f64, b, 0.1, 0.1)
         _gae_return(f32, f32, f64, b, 0.1, 0.1)
         _nstep_return(f64, b, f32.reshape(-1, 1), i64, 0.1, 1)
+
+
+class RandomActionPolicy(BasePolicy):
+    def __init__(
+        self,
+        action_space: gym.Space,
+    ) -> None:
+        super().__init__(action_space=action_space)
+        if not isinstance(action_space, gym.spaces.Discrete | gym.spaces.Box):
+            raise NotImplementedError(
+                f"RandomActionPolicy currently only supports Discrete and Box action spaces, but got {action_space}.",
+            )
+        self.actor = RandomActor(action_space)
+
+    def forward(
+        self,
+        batch: ObsBatchProtocol,
+        state: dict | BatchProtocol | np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> ActBatchProtocol:
+        return cast(ActBatchProtocol, Batch(act=self.actor(batch.obs)))
+
+    def learn(self, batch: RolloutBatchProtocol, *args: Any, **kwargs: Any) -> TrainingStats:
+        return TrainingStats()
 
 
 # TODO: rename? See docstring

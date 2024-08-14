@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal, Protocol
 
 import torch
+from sensai.util.pickle import setstate
+from sensai.util.string import ToStringMixin
 from torch.optim.lr_scheduler import LRScheduler
 
 from tianshou.exploration import BaseNoise
@@ -12,16 +14,10 @@ from tianshou.highlevel.module.core import TDevice
 from tianshou.highlevel.module.module_opt import ModuleOpt
 from tianshou.highlevel.optim import OptimizerFactory
 from tianshou.highlevel.params.alpha import AutoAlphaFactory
-from tianshou.highlevel.params.dist_fn import (
-    DistributionFunctionFactory,
-    DistributionFunctionFactoryDefault,
-)
 from tianshou.highlevel.params.env_param import EnvValueFactory, FloatEnvValueFactory
 from tianshou.highlevel.params.lr_scheduler import LRSchedulerFactory
 from tianshou.highlevel.params.noise import NoiseFactory
-from tianshou.policy.modelfree.pg import TDistFnDiscrOrCont
 from tianshou.utils import MultipleLRSchedulers
-from tianshou.utils.string import ToStringMixin
 
 
 @dataclass(kw_only=True)
@@ -209,15 +205,6 @@ class ParamTransformerFloatEnvParamFactory(ParamTransformerChangeValue):
         return value
 
 
-class ParamTransformerDistributionFunction(ParamTransformerChangeValue):
-    def change_value(self, value: Any, data: ParamTransformerData) -> Any:
-        if value == "default":
-            value = DistributionFunctionFactoryDefault().create_dist_fn(data.envs)
-        elif isinstance(value, DistributionFunctionFactory):
-            value = value.create_dist_fn(data.envs)
-        return value
-
-
 class ParamTransformerActionScaling(ParamTransformerChangeValue):
     def change_value(self, value: Any, data: ParamTransformerData) -> Any:
         if value == "default":
@@ -289,7 +276,7 @@ class ParamsMixinActionScaling(GetParamTransformersProtocol):
     """
 
     def _get_param_transformers(self) -> list[ParamTransformer]:
-        return []
+        return [ParamTransformerActionScaling("action_scaling")]
 
 
 @dataclass
@@ -322,21 +309,14 @@ class PGParams(Params, ParamsMixinActionScaling, ParamsMixinLearningRateWithSche
     whether to use deterministic action (the dist's mode) instead of stochastic one during evaluation.
     Does not affect training.
     """
-    dist_fn: TDistFnDiscrOrCont | DistributionFunctionFactory | Literal["default"] = "default"
-    """
-    This can either be a function which maps the model output to a torch distribution or a
-    factory for the creation of such a function.
-    When set to "default", a factory which creates Gaussian distributions from mean and standard
-    deviation will be used for the continuous case and which creates categorical distributions
-    for the discrete case (see :class:`DistributionFunctionFactoryDefault`)
-    """
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        setstate(PGParams, self, state, removed_properties=["dist_fn"])
 
     def _get_param_transformers(self) -> list[ParamTransformer]:
         transformers = super()._get_param_transformers()
         transformers.extend(ParamsMixinActionScaling._get_param_transformers(self))
         transformers.extend(ParamsMixinLearningRateWithScheduler._get_param_transformers(self))
-        transformers.append(ParamTransformerActionScaling("action_scaling"))
-        transformers.append(ParamTransformerDistributionFunction("dist_fn"))
         return transformers
 
 

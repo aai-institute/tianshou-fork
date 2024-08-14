@@ -22,6 +22,8 @@ class SequenceSummaryStats(DataclassPPrintMixin):
 
     @classmethod
     def from_sequence(cls, sequence: Sequence[float | int] | np.ndarray) -> "SequenceSummaryStats":
+        if len(sequence) == 0:
+            return cls(mean=0.0, std=0.0, max=0.0, min=0.0)
         return cls(
             mean=float(np.mean(sequence)),
             std=float(np.std(sequence)),
@@ -54,6 +56,8 @@ class InfoStats(DataclassPPrintMixin):
 
     gradient_step: int
     """The total gradient step."""
+    best_score: float
+    """The best score over the test results. The one with the highest score will be considered the best model."""
     best_reward: float
     """The best reward over the test results."""
     best_reward_std: float
